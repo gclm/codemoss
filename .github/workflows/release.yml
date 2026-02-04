@@ -147,8 +147,9 @@ jobs:
             -C src-tauri/target/release/bundle/macos CodeMoss.app
 
           # Write the signing key file for tauri signer sign command
+          # tauri signer sign expects a file containing base64-encoded minisign key (NOT decoded)
           mkdir -p "$HOME/.tauri"
-          echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.tauri/codemoss.key"
+          printf '%s' "$TAURI_SIGNING_PRIVATE_KEY_B64" > "$HOME/.tauri/codemoss.key"
 
           npm run tauri signer sign -- \
             -f "$HOME/.tauri/codemoss.key" \

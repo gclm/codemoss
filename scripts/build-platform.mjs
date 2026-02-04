@@ -180,6 +180,13 @@ async function buildMacOS(arch, options = {}) {
   console.log("\nBuilding frontend...");
   exec("npm run build");
 
+  // Clean Rust build cache to force recompile with new frontend assets
+  // Tauri embeds frontend resources in the binary, so we need to force recompilation
+  console.log("\nCleaning Rust build cache to embed latest frontend...");
+  exec(`rm -rf ${TAURI_DIR}/target/${target}/release/.fingerprint`, { ignoreError: true });
+  exec(`rm -f ${TAURI_DIR}/target/${target}/release/code-moss`, { ignoreError: true });
+  exec(`rm -rf ${TAURI_DIR}/target/${target}/release/bundle`, { ignoreError: true });
+
   // Build the app
   const buildEnv = arch === "arm64" ? "" : `X86_64_APPLE_DARWIN_OPENSSL_DIR=${CONFIG.openssl.x64} `;
   exec(`${buildEnv}npm run tauri -- build --target ${target} --bundles app`);
