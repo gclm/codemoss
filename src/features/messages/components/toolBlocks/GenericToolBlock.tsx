@@ -1,8 +1,9 @@
 /**
  * 通用工具块组件 - 用于展示各种工具调用
  * Generic Tool Block Component - for displaying various tool calls
+ * 参考: idea-claude-code-gui 项目风格
  */
-import { memo, useMemo } from 'react';
+import { memo, useMemo, useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import Wrench from 'lucide-react/dist/esm/icons/wrench';
 import FileText from 'lucide-react/dist/esm/icons/file-text';
@@ -13,6 +14,8 @@ import FolderSearch from 'lucide-react/dist/esm/icons/folder-search';
 import Globe from 'lucide-react/dist/esm/icons/globe';
 import ListTodo from 'lucide-react/dist/esm/icons/list-todo';
 import Diff from 'lucide-react/dist/esm/icons/diff';
+import ListChecks from 'lucide-react/dist/esm/icons/list-checks';
+import Zap from 'lucide-react/dist/esm/icons/zap';
 import type { ConversationItem } from '../../../../types';
 import {
   extractToolName,
@@ -28,13 +31,43 @@ import {
   isSearchTool,
   isWebTool,
 } from './toolConstants';
+import { FileIcon } from './FileIcon';
 
-type StatusTone = 'completed' | 'processing' | 'failed' | 'unknown';
+type StatusTone = 'completed' | 'processing' | 'failed' | 'pending';
 
 interface GenericToolBlockProps {
   item: Extract<ConversationItem, { kind: 'tool' }>;
   isExpanded: boolean;
   onToggle: (id: string) => void;
+}
+
+// 可折叠的工具列表（参考 idea-claude-code-gui）
+const COLLAPSIBLE_TOOLS = new Set([
+  'grep', 'glob', 'write', 'save-file', 'askuserquestion',
+  'update_plan', 'shell_command', 'exitplanmode',
+  'webfetch', 'websearch', 'skill', 'useskill', 'runskill',
+  'run_skill', 'execute_skill', 'task', 'todowrite',
+]);
+
+// 特殊文件名（没有扩展名但确实是文件）
+const SPECIAL_FILES = new Set([
+  'makefile', 'dockerfile', 'jenkinsfile', 'vagrantfile',
+  'gemfile', 'rakefile', 'procfile', 'guardfile',
+  'license', 'licence', 'readme', 'changelog',
+  'gradlew', 'cname', 'authors', 'contributors',
+]);
+
+/**
+ * 检查是否为目录路径
+ */
+function isDirectoryPath(filePath: string, fileName: string): boolean {
+  const cleanFileName = fileName.replace(/:\d+(-\d+)?$/, '');
+  return (
+    filePath.endsWith('/') ||
+    filePath === '.' ||
+    filePath === '..' ||
+    (!cleanFileName.includes('.') && !SPECIAL_FILES.has(cleanFileName.toLowerCase()))
+  );
 }
 
 /**
@@ -50,13 +83,19 @@ function getToolIcon(toolName: string, title: string): LucideIcon {
   if (lower.includes('glob') || lower.includes('find')) return FolderSearch;
   if (isSearchTool(lower)) return Search;
   if (isWebTool(lower)) return Globe;
-  if (lower.includes('todo') || lower.includes('task')) return ListTodo;
+  if (lower === 'todowrite' || lower === 'todo_write') return ListChecks;
+  if (lower === 'task') return ListTodo;
+  if (lower.includes('skill')) return Zap;
   if (lower.includes('diff')) return Diff;
 
   // MCP 工具根据名称猜测
   if (isMcpTool(title)) {
-    if (title.toLowerCase().includes('search') || title.toLowerCase().includes('context')) {
+    const lowerTitle = title.toLowerCase();
+    if (lowerTitle.includes('search') || lowerTitle.includes('context')) {
       return Search;
+    }
+    if (lowerTitle.includes('read') || lowerTitle.includes('file')) {
+      return FileText;
     }
   }
 
@@ -79,7 +118,15 @@ function getToolStatus(
   // 如果有输出或变更，视为完成
   if (item.output || hasChanges) return 'completed';
 
-  return 'processing';
+  return 'pending';
+}
+
+/**
+ * 检查工具是否应该可折叠
+ */
+function isCollapsibleTool(toolName: string, title: string): boolean {
+  const lower = toolName.toLowerCase();
+  return COLLAPSIBLE_TOOLS.has(lower) || isMcpTool(title);
 }
 
 /**
@@ -143,7 +190,7 @@ function extractSummary(
 
 export const GenericToolBlock = memo(function GenericToolBlock({
   item,
-  isExpanded,
+  isExpanded: externalExpanded,
   onToggle,
 }: GenericToolBlockProps) {
   const toolName = extractToolName(item.title);
@@ -153,16 +200,38 @@ export const GenericToolBlock = memo(function GenericToolBlock({
   const status = getToolStatus(item, hasChanges);
   const summary = extractSummary(item, toolName);
 
+  // 判断是否为可折叠工具
+  const isCollapsible = isCollapsibleTool(toolName, item.title);
+
+  // 内部展开状态（用于可折叠工具）
+  const [internalExpanded, setInternalExpanded] = useState(false);
+
+  // 实际的展开状态
+  const isExpanded = isCollapsible ? internalExpanded : externalExpanded;
+
   // 解析详情用于展开显示
   const parsedArgs = useMemo(() => parseToolArgs(item.detail), [item.detail]);
 
-  // 需要省略的字段（已在摘要中显示）
-  const omitFields = new Set([
-    'file_path', 'path', 'target_file', 'filename',
+  // 提取文件路径用于显示文件图标
+  const filePath = useMemo(() => {
+    if (!parsedArgs) return null;
+    const path = getFirstStringField(parsedArgs, ['file_path', 'path', 'target_file', 'filename', 'notebook_path']);
+    return path || null;
+  }, [parsedArgs]);
+
+  // 检查是否为文件或目录
+  const fileName = filePath ? getFileName(filePath) : '';
+  const isDirectory = filePath ? isDirectoryPath(filePath, fileName) : false;
+  const isFile = filePath && !isDirectory;
+
+  // 需要省略的字段（已在摘要中显示或不需要展示）
+  const omitFields = useMemo(() => new Set([
+    'file_path', 'path', 'target_file', 'filename', 'notebook_path',
     'pattern', 'query', 'search_term',
     'command', 'cmd',
     'url',
-  ]);
+    'description', 'workdir', // Codex 相关字段
+  ]), []);
 
   // 过滤后的参数
   const otherParams = useMemo(() => {
@@ -170,21 +239,41 @@ export const GenericToolBlock = memo(function GenericToolBlock({
     return Object.entries(parsedArgs).filter(
       ([key, value]) => !omitFields.has(key) && value !== undefined && value !== null && value !== ''
     );
-  }, [parsedArgs]);
+  }, [parsedArgs, omitFields]);
+
+  // 是否应该显示详情
+  const shouldShowDetails = otherParams.length > 0 && isExpanded;
+
+  // 点击处理
+  const handleClick = () => {
+    if (isCollapsible) {
+      setInternalExpanded(prev => !prev);
+    } else {
+      onToggle(item.id);
+    }
+  };
 
   return (
     <div className="tool-block">
       <button
         type="button"
-        className="tool-block-header"
-        onClick={() => onToggle(item.id)}
+        className={`tool-block-header${isExpanded ? ' expanded' : ''}`}
+        onClick={handleClick}
         aria-expanded={isExpanded}
+        style={{ cursor: isCollapsible || otherParams.length > 0 || item.output || hasChanges ? 'pointer' : 'default' }}
       >
         <div className="tool-block-title">
-          <Icon className={`tool-block-icon ${status}`} size={14} aria-hidden />
+          <Icon className={`tool-block-icon ${status}`} size={16} aria-hidden />
           <span className="tool-block-name">{displayName}</span>
           {summary && (
-            <span className="tool-block-summary" title={summary}>
+            <span
+              className="tool-block-summary"
+              title={summary}
+              style={(isFile || isDirectory) ? { display: 'inline-flex', alignItems: 'center', gap: '4px' } : undefined}
+            >
+              {(isFile || isDirectory) && (
+                <FileIcon fileName={isDirectory ? fileName + '/' : fileName} size={14} />
+              )}
               {summary}
             </span>
           )}
@@ -192,31 +281,34 @@ export const GenericToolBlock = memo(function GenericToolBlock({
         <span className={`tool-block-dot ${status}`} aria-hidden />
       </button>
 
-      {isExpanded && (
+      {shouldShowDetails && (
         <div className="tool-block-details">
-          {/* 显示其他参数 */}
-          {otherParams.length > 0 && (
+          <div className="tool-block-content-wrapper">
             <div className="tool-block-params">
               {otherParams.map(([key, value]) => (
                 <div key={key} className="tool-block-param">
-                  <span className="tool-block-param-key">{key}:</span>
+                  <span className="tool-block-param-key">{key}</span>
                   <span className="tool-block-param-value">
                     {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
                   </span>
                 </div>
               ))}
             </div>
-          )}
+          </div>
+        </div>
+      )}
 
-          {/* 显示输出 */}
-          {item.output && (
-            <div className="tool-block-output">
-              <pre>{item.output}</pre>
-            </div>
-          )}
+      {/* 显示输出 */}
+      {isExpanded && item.output && (
+        <div className="tool-block-output">
+          <pre>{item.output}</pre>
+        </div>
+      )}
 
-          {/* 显示文件变更 */}
-          {hasChanges && item.changes && (
+      {/* 显示文件变更 */}
+      {isExpanded && hasChanges && item.changes && (
+        <div className="tool-block-details">
+          <div className="tool-block-content-wrapper">
             <div className="tool-block-changes">
               {item.changes.map((change, index) => (
                 <div key={`${change.path}-${index}`} className="tool-block-change">
@@ -224,12 +316,13 @@ export const GenericToolBlock = memo(function GenericToolBlock({
                     {change.kind && (
                       <span className="tool-block-change-kind">{change.kind.toUpperCase()}</span>
                     )}
+                    <FileIcon fileName={getFileName(change.path)} size={14} />
                     <span className="tool-block-change-path">{getFileName(change.path)}</span>
                   </div>
                 </div>
               ))}
             </div>
-          )}
+          </div>
         </div>
       )}
     </div>

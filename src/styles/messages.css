@@ -758,16 +758,32 @@
 }
 
 
+/* 工具分组容器 (参考 idea-claude-code-gui) */
 .tool-group {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin: 8px 0 12px;
+  gap: 0;
+  margin: 12px 0;
+  background: var(--bg-primary, var(--surface-card));
+  border: 1px solid var(--border-primary, var(--border-subtle));
+  border-radius: 8px;
+  overflow: hidden;
 }
 
 .tool-group-header {
-  border-left: 2px solid var(--border-subtle);
-  padding: 2px 0 2px 12px;
+  padding: 8px 12px;
+  background: var(--bg-primary, transparent);
+  border-left: none;
+  border-bottom: 1px solid transparent;
+  transition: background-color 0.2s ease;
+}
+
+.tool-group-header:hover {
+  background: var(--bg-secondary, var(--surface-hover));
+}
+
+.tool-group:not(.tool-group-collapsed) .tool-group-header {
+  border-bottom-color: var(--border-primary, var(--border-subtle));
 }
 
 .tool-group-toggle {
@@ -780,29 +796,40 @@
   padding: 0;
   cursor: pointer;
   text-align: left;
-  font-size: 11px;
-  color: var(--text-muted);
+  font-size: 12px;
+  color: var(--text-secondary, var(--text-muted));
   letter-spacing: 0.02em;
 }
 
 .tool-group-toggle:focus-visible {
-  outline: 1px solid var(--border-strong);
-  border-radius: 6px;
+  outline: 2px solid var(--border-accent);
+  outline-offset: -2px;
+  border-radius: 4px;
 }
 
 .tool-group-chevron {
   display: inline-flex;
   align-items: center;
-  color: var(--text-subtle);
+  color: var(--text-tertiary, var(--text-subtle));
+  transition: transform 0.2s ease;
+}
+
+.tool-group-collapsed .tool-group-chevron {
+  transform: rotate(0deg);
+}
+
+.tool-group:not(.tool-group-collapsed) .tool-group-chevron {
+  transform: rotate(0deg);
 }
 
 .tool-group-summary {
-  color: var(--text-muted);
+  color: var(--text-secondary, var(--text-muted));
+  font-weight: 500;
 }
 
 .tool-group-progress {
-  color: var(--text-faint);
-  font-size: 11px;
+  color: var(--text-tertiary, var(--text-faint));
+  font-size: 12px;
   margin-left: auto;
   padding-left: 8px;
 }
@@ -810,7 +837,21 @@
 .tool-group-body {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 0;
+  padding: 8px;
+}
+
+.tool-group-body .tool-block {
+  margin: 4px 0;
+  border-radius: 6px;
+}
+
+.tool-group-body .tool-block:first-child {
+  margin-top: 0;
+}
+
+.tool-group-body .tool-block:last-child {
+  margin-bottom: 0;
 }
 
 .tool-group-body .tool-inline {

@@ -56,37 +56,33 @@ export const ReadToolBlock = memo(function ReadToolBlock({
     <div className="tool-block">
       <button
         type="button"
-        className="tool-block-header"
+        className={`tool-block-header${isExpanded && item.output ? ' expanded' : ''}`}
         onClick={() => onToggle(item.id)}
         aria-expanded={isExpanded}
       >
         <div className="tool-block-title">
           {isDirectory ? (
-            <Folder className={`tool-block-icon ${status}`} size={14} aria-hidden />
+            <Folder className={`tool-block-icon ${status}`} size={16} aria-hidden />
           ) : (
-            <FileText className={`tool-block-icon ${status}`} size={14} aria-hidden />
+            <FileText className={`tool-block-icon ${status}`} size={16} aria-hidden />
           )}
           <span className="tool-block-name">
             {isDirectory ? '读取目录' : '读取文件'}
           </span>
           {fileName && (
             <span className="tool-block-summary tool-block-file">
-              <FileIcon fileName={fileName} size={14} />
+              <FileIcon fileName={isDirectory ? fileName + '/' : fileName} size={14} />
               <span>{fileName}</span>
+              {lineInfo && <span className="tool-block-line-info">{lineInfo}</span>}
             </span>
-          )}
-          {lineInfo && (
-            <span className="tool-block-line-info">{lineInfo}</span>
           )}
         </div>
         <span className={`tool-block-dot ${status}`} aria-hidden />
       </button>
 
       {isExpanded && item.output && (
-        <div className="tool-block-details">
-          <div className="tool-block-output">
-            <pre>{item.output}</pre>
-          </div>
+        <div className="tool-block-output">
+          <pre>{item.output}</pre>
         </div>
       )}
     </div>

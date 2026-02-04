@@ -80,6 +80,28 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: rgba(255, 255, 255, 0.2);
   --scrollbar-thumb-hover: rgba(255, 255, 255, 0.35);
+
+  /* 工具块主题变量 (参考 idea-claude-code-gui) */
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #252526;
+  --bg-tertiary: #2b2d31;
+  --bg-hover: #35373c;
+  --bg-active: #37373d;
+
+  --text-secondary: #e0e0e0;
+  --text-tertiary: #858585;
+
+  --border-primary: #333;
+
+  --color-success: #4caf50;
+  --color-warning: #ff9800;
+  --color-error: #f44336;
+
+  --color-tool-bg: rgba(0, 0, 0, 0.2);
+  --color-tool-icon: #64b5f6;
+  --color-tool-name: #90caf9;
+  --color-tool-summary: #888;
+  --color-tool-file-link: #a5d6a7;
 }
 
 :root[data-theme="dark"] {

@@ -126,12 +126,12 @@ export const BashToolBlock = memo(function BashToolBlock({
     <div className="tool-block">
       <button
         type="button"
-        className="tool-block-header"
+        className={`tool-block-header${showOutput ? ' expanded' : ''}`}
         onClick={() => onToggle(item.id)}
         aria-expanded={isExpanded}
       >
         <div className="tool-block-title">
-          <Terminal className={`tool-block-icon ${status}`} size={14} aria-hidden />
+          <Terminal className={`tool-block-icon ${status}`} size={16} aria-hidden />
           <span className="tool-block-name">运行命令</span>
           {description ? (
             <span className="tool-block-summary" title={description}>
@@ -146,27 +146,34 @@ export const BashToolBlock = memo(function BashToolBlock({
         <span className={`tool-block-dot ${status}`} aria-hidden />
       </button>
 
-      {showOutput && outputLines.length > 0 && (
-        <div className="tool-block-details">
+      {showOutput && (
+        <>
+          {isExpanded && command && (
+            <div className="bash-command-block">
+              {command}
+            </div>
+          )}
           {cwd && isExpanded && (
             <div className="tool-block-cwd">
               cwd: {cwd}
             </div>
           )}
-          <div
-            className="tool-block-terminal"
-            ref={containerRef}
-            onScroll={handleScroll}
-            role="log"
-            aria-live="polite"
-          >
-            {outputLines.map((line, index) => (
-              <div key={`${index}-${line.slice(0, 20)}`} className="tool-block-terminal-line">
-                {line || ' '}
-              </div>
-            ))}
-          </div>
-        </div>
+          {outputLines.length > 0 && (
+            <div
+              className="tool-block-terminal"
+              ref={containerRef}
+              onScroll={handleScroll}
+              role="log"
+              aria-live="polite"
+            >
+              {outputLines.map((line, index) => (
+                <div key={`${index}-${line.slice(0, 20)}`} className="tool-block-terminal-line">
+                  {line || ' '}
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -90,7 +90,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.tauri"
-          echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.tauri/codemoss.key"
+          echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode | tr -d '\n\r ' > "$HOME/.tauri/codemoss.key"
 
       - name: Build app bundle
         env:
@@ -98,7 +98,7 @@ jobs:
         run: |
           set -euo pipefail
           export TAURI_SIGNING_PRIVATE_KEY
-          TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/codemoss.key")"
+          TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/codemoss.key" | tr -d '\n\r ')"
           npm run tauri -- build --bundles app
 
       - name: Bundle OpenSSL and re-sign
@@ -208,13 +208,13 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p "$HOME/.tauri"
-          echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode > "$HOME/.tauri/codemoss.key"
+          echo "$TAURI_SIGNING_PRIVATE_KEY_B64" | base64 --decode | tr -d '\n\r ' > "$HOME/.tauri/codemoss.key"
 
       - name: build AppImage
         run: |
           set -euo pipefail
           export TAURI_SIGNING_PRIVATE_KEY
-          TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/codemoss.key")"
+          TAURI_SIGNING_PRIVATE_KEY="$(cat "$HOME/.tauri/codemoss.key" | tr -d '\n\r ')"
           npm run tauri -- build --bundles appimage
 
       - name: Upload AppImage
@@ -254,12 +254,14 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.tauri" | Out-Null
-          [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:TAURI_SIGNING_PRIVATE_KEY_B64)) | Out-File -FilePath "$env:USERPROFILE\.tauri\codemoss.key" -Encoding utf8 -NoNewline
+          $decoded = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($env:TAURI_SIGNING_PRIVATE_KEY_B64))
+          $cleaned = $decoded -replace '[\r\n\s]', ''
+          [System.IO.File]::WriteAllText("$env:USERPROFILE\.tauri\codemoss.key", $cleaned)
 
       - name: Build Windows installer
         shell: pwsh
         run: |
-          $env:TAURI_SIGNING_PRIVATE_KEY = Get-Content "$env:USERPROFILE\.tauri\codemoss.key" -Raw
+          $env:TAURI_SIGNING_PRIVATE_KEY = (Get-Content "$env:USERPROFILE\.tauri\codemoss.key" -Raw) -replace '[\r\n\s]', ''
           npm run tauri -- build --config src-tauri/tauri.windows.conf.json --bundles nsis
 
       - name: Get version

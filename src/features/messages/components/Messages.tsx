@@ -1,5 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import Check from "lucide-react/dist/esm/icons/check";
@@ -1118,6 +1119,7 @@ export const Messages = memo(function Messages({
   userInputRequests = [],
   onUserInputSubmit,
 }: MessagesProps) {
+  const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
@@ -1436,10 +1438,10 @@ export const Messages = memo(function Messages({
                 : "processing";
 
           const summaryParts = [
-            formatCount(group.toolCount, "tool call", "tool calls"),
+            formatCount(group.toolCount, t("messages.toolCall"), t("messages.toolCalls")),
           ];
           if (group.messageCount > 0) {
-            summaryParts.push(formatCount(group.messageCount, "message", "messages"));
+            summaryParts.push(formatCount(group.messageCount, t("messages.message"), t("messages.messages")));
           }
           const summaryText = summaryParts.join(", ");
           const groupBodyId = `tool-group-${group.id}`;
@@ -1456,7 +1458,7 @@ export const Messages = memo(function Messages({
                   onClick={() => toggleToolGroup(group.id)}
                   aria-expanded={!isCollapsed}
                   aria-controls={groupBodyId}
-                  aria-label={isCollapsed ? "Expand tool calls" : "Collapse tool calls"}
+                  aria-label={isCollapsed ? t("messages.expandToolCalls") : t("messages.collapseToolCalls")}
                 >
                   <span className="tool-group-chevron" aria-hidden>
                     <ChevronIcon size={14} />

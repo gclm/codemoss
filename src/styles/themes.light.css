@@ -59,6 +59,28 @@
   --scrollbar-track: transparent;
   --scrollbar-thumb: rgba(15, 23, 36, 0.18);
   --scrollbar-thumb-hover: rgba(15, 23, 36, 0.32);
+
+  /* 工具块主题变量 (参考 idea-claude-code-gui) */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f3f3f3;
+  --bg-tertiary: #e8e8e8;
+  --bg-hover: #e0e0e0;
+  --bg-active: #d6d6d6;
+
+  --text-secondary: #1a1a1a;
+  --text-tertiary: #666666;
+
+  --border-primary: #d0d0d0;
+
+  --color-success: #107c10;
+  --color-warning: #f7630c;
+  --color-error: #e81123;
+
+  --color-tool-bg: rgba(0, 0, 0, 0.04);
+  --color-tool-icon: #0078d4;
+  --color-tool-name: #0066cc;
+  --color-tool-summary: #666666;
+  --color-tool-file-link: #107c10;
 }
 
 :root[data-theme="light"] .app.reduced-transparency {

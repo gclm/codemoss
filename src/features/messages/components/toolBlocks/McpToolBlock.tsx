@@ -84,7 +84,7 @@ export const McpToolBlock = memo(function McpToolBlock({
   const displaySummary = truncateText(summary, 50);
 
   // 需要省略的字段
-  const omitFields = new Set(['query', 'pattern', 'path', 'file_path', 'text', 'prompt']);
+  const omitFields = useMemo(() => new Set(['query', 'pattern', 'path', 'file_path', 'text', 'prompt']), []);
 
   // 过滤后的参数
   const otherParams = useMemo(() => {
@@ -92,18 +92,20 @@ export const McpToolBlock = memo(function McpToolBlock({
     return Object.entries(args).filter(
       ([key, value]) => !omitFields.has(key) && value !== undefined && value !== null && value !== ''
     );
-  }, [args]);
+  }, [args, omitFields]);
+
+  const hasDetails = otherParams.length > 0 || item.output;
 
   return (
     <div className="tool-block tool-block-mcp">
       <button
         type="button"
-        className="tool-block-header"
+        className={`tool-block-header${isExpanded && hasDetails ? ' expanded' : ''}`}
         onClick={() => onToggle(item.id)}
         aria-expanded={isExpanded}
       >
         <div className="tool-block-title">
-          <Icon className={`tool-block-icon ${status}`} size={14} aria-hidden />
+          <Icon className={`tool-block-icon ${status}`} size={16} aria-hidden />
           <span className="tool-block-name">{displayName}</span>
           {displaySummary && (
             <span className="tool-block-summary" title={summary}>
@@ -114,19 +116,23 @@ export const McpToolBlock = memo(function McpToolBlock({
         <span className={`tool-block-dot ${status}`} aria-hidden />
       </button>
 
-      {isExpanded && (
-        <div className="tool-block-details">
+      {isExpanded && hasDetails && (
+        <>
           {/* 显示其他参数 */}
           {otherParams.length > 0 && (
-            <div className="tool-block-params">
-              {otherParams.map(([key, value]) => (
-                <div key={key} className="tool-block-param">
-                  <span className="tool-block-param-key">{key}:</span>
-                  <span className="tool-block-param-value">
-                    {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
-                  </span>
+            <div className="tool-block-details">
+              <div className="tool-block-content-wrapper">
+                <div className="tool-block-params">
+                  {otherParams.map(([key, value]) => (
+                    <div key={key} className="tool-block-param">
+                      <span className="tool-block-param-key">{key}</span>
+                      <span className="tool-block-param-value">
+                        {typeof value === 'object' ? JSON.stringify(value, null, 2) : String(value)}
+                      </span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
             </div>
           )}
 
@@ -136,7 +142,7 @@ export const McpToolBlock = memo(function McpToolBlock({
               <pre>{item.output}</pre>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );

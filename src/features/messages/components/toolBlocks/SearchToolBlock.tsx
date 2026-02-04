@@ -50,12 +50,12 @@ export const SearchToolBlock = memo(function SearchToolBlock({
     <div className="tool-block">
       <button
         type="button"
-        className="tool-block-header"
+        className={`tool-block-header${isExpanded ? ' expanded' : ''}`}
         onClick={() => onToggle(item.id)}
         aria-expanded={isExpanded}
       >
         <div className="tool-block-title">
-          <Icon className={`tool-block-icon ${status}`} size={14} aria-hidden />
+          <Icon className={`tool-block-icon ${status}`} size={16} aria-hidden />
           <span className="tool-block-name">{displayName}</span>
           {displayPattern && (
             <span className="tool-block-summary tool-block-pattern" title={pattern}>
@@ -67,12 +67,16 @@ export const SearchToolBlock = memo(function SearchToolBlock({
       </button>
 
       {isExpanded && (
-        <div className="tool-block-details">
+        <>
           {path && (
-            <div className="tool-block-params">
-              <div className="tool-block-param">
-                <span className="tool-block-param-key">路径:</span>
-                <span className="tool-block-param-value">{path}</span>
+            <div className="tool-block-details">
+              <div className="tool-block-content-wrapper">
+                <div className="tool-block-params">
+                  <div className="tool-block-param">
+                    <span className="tool-block-param-key">路径</span>
+                    <span className="tool-block-param-value">{path}</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -81,7 +85,7 @@ export const SearchToolBlock = memo(function SearchToolBlock({
               <pre>{item.output}</pre>
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
