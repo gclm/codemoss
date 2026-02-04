@@ -176,6 +176,10 @@ async function buildMacOS(arch, options = {}) {
     exec("rustup target add x86_64-apple-darwin", { ignoreError: true });
   }
 
+  // Build frontend first to ensure latest styles are included
+  console.log("\nBuilding frontend...");
+  exec("npm run build");
+
   // Build the app
   const buildEnv = arch === "arm64" ? "" : `X86_64_APPLE_DARWIN_OPENSSL_DIR=${CONFIG.openssl.x64} `;
   exec(`${buildEnv}npm run tauri -- build --target ${target} --bundles app`);
