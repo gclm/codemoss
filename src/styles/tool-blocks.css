@@ -355,6 +355,19 @@
   padding: 10px;
 }
 
+/* 原始详情（当没有其他可显示内容时） */
+.tool-block-raw-detail {
+  font-family: var(--code-font-family, 'SF Mono', 'SFMono-Regular', Menlo, Monaco, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary, var(--text-muted));
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
 /* 参数列表 */
 .tool-block-params {
   display: flex;

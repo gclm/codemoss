@@ -325,6 +325,15 @@ export const GenericToolBlock = memo(function GenericToolBlock({
           </div>
         </div>
       )}
+
+      {/* 显示原始详情（当没有其他可显示内容时） */}
+      {isExpanded && !shouldShowDetails && !item.output && !hasChanges && item.detail && (
+        <div className="tool-block-details">
+          <div className="tool-block-content-wrapper">
+            <pre className="tool-block-raw-detail">{item.detail}</pre>
+          </div>
+        </div>
+      )}
     </div>
   );
 });
