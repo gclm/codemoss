@@ -113,6 +113,8 @@
   }
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 960px) {
   .update-toasts {
     top: auto;
@@ -121,3 +123,4 @@
     transform: translateX(-50%);
   }
 }
+*/

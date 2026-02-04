@@ -32,8 +32,7 @@ type UseUpdaterOptions = {
   onDebug?: (entry: DebugEntry) => void;
 };
 
-// TODO: Set to true to re-enable auto update checking
-const AUTO_UPDATE_ENABLED = false;
+const AUTO_UPDATE_ENABLED = true;
 
 export function useUpdater({ enabled = true, onDebug }: UseUpdaterOptions) {
   // Force disable auto update if the global flag is off

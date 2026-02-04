@@ -51,8 +51,11 @@
   flex: 1;
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 960px) {
   .app.layout-compact .sidebar-resizer {
     display: none;
   }
 }
+*/

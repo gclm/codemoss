@@ -1008,8 +1008,11 @@
   pointer-events: none;
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 960px) {
   .right-panel-resizer {
     display: none;
   }
 }
+*/

@@ -169,7 +169,8 @@ body {
   opacity: 1;
 }
 
-
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 960px) {
   .app {
     grid-template-columns: 1fr;
@@ -189,3 +190,4 @@ body {
     display: none;
   }
 }
+*/

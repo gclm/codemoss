@@ -735,6 +735,8 @@
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 720px) {
   .settings-body {
     grid-template-columns: 1fr;
@@ -746,3 +748,4 @@
     border-bottom: 1px solid var(--border-muted);
   }
 }
+*/

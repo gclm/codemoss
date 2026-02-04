@@ -497,6 +497,8 @@
   }
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 720px) {
   .workspace-home {
     padding: 24px 20px;
@@ -506,6 +508,7 @@
     font-size: 28px;
   }
 }
+*/
 
 /* Project Info Button and Panel */
 .workspace-home-project-info {

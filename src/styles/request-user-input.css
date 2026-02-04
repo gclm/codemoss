@@ -118,8 +118,11 @@
   color: var(--text-muted);
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 960px) {
   .request-user-input-card {
     width: min(100%, 520px);
   }
 }
+*/

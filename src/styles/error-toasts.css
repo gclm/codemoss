@@ -61,6 +61,8 @@
   }
 }
 
+/* Responsive layout disabled - always use desktop layout */
+/*
 @media (max-width: 720px) {
   .error-toasts {
     top: 10px;
@@ -70,4 +72,5 @@
     min-width: 0;
   }
 }
+*/
 
