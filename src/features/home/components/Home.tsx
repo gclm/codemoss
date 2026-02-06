@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { formatRelativeTime } from "../../../utils/time";
+import { Plus, Clock, MessageSquare, ArrowRight } from "lucide-react";
 
 type LatestAgentRun = {
   message: string;
@@ -28,69 +29,79 @@ export function Home({
 
   return (
     <div className="home">
-      <div className="home-actions">
-        <button
-          className="home-add-project-button"
-          onClick={onOpenProject}
-          data-tauri-drag-region="false"
-        >
-          {t("home.openProject")}
-        </button>
-      </div>
-      <div className="home-latest">
-        <div className="home-latest-header">
-          <div className="home-latest-label">{t("home.latestAgents")}</div>
+      <div className="home-content">
+        <div className="home-hero">
+          <h1 className="home-title">{t("home.welcome")}</h1>
+          <p className="home-subtitle">{t("home.subtitle", "What would you like to build today?")}</p>
+          
+          <div className="home-hero-actions">
+            <button
+              className="home-primary-button"
+              onClick={onOpenProject}
+              data-tauri-drag-region="false"
+            >
+              <Plus size={20} />
+              <span>{t("home.openProject")}</span>
+            </button>
+          </div>
         </div>
-        {latestAgentRuns.length > 0 ? (
-          <div className="home-latest-grid">
-            {latestAgentRuns.map((run) => (
-              <button
-                className="home-latest-card home-latest-card-button"
-                key={run.threadId}
-                onClick={() => onSelectThread(run.workspaceId, run.threadId)}
-                type="button"
-              >
-                <div className="home-latest-card-header">
-                  <div className="home-latest-project">
-                    <span className="home-latest-project-name">{run.projectName}</span>
-                    {run.groupName && (
-                      <span className="home-latest-group">{run.groupName}</span>
-                    )}
-                  </div>
-                  <div className="home-latest-time">
-                    {formatRelativeTime(run.timestamp)}
-                  </div>
-                </div>
-                <div className="home-latest-message">
-                  {run.message.trim() || t("home.agentReplied")}
-                </div>
-                {run.isProcessing && (
-                  <div className="home-latest-status">{t("home.running")}</div>
-                )}
-              </button>
-            ))}
+
+        <div className="home-recent">
+          <div className="home-recent-header">
+            <h2 className="home-recent-title">{t("home.latestActivity", "Recent Activity")}</h2>
           </div>
-        ) : isLoadingLatestAgents ? (
-          <div className="home-latest-grid home-latest-grid-loading" aria-label={t("home.loadingAgents")}>
-            {Array.from({ length: 3 }).map((_, index) => (
-              <div className="home-latest-card home-latest-card-skeleton" key={index}>
-                <div className="home-latest-card-header">
-                  <span className="home-latest-skeleton home-latest-skeleton-title" />
-                  <span className="home-latest-skeleton home-latest-skeleton-time" />
-                </div>
-                <span className="home-latest-skeleton home-latest-skeleton-line" />
-                <span className="home-latest-skeleton home-latest-skeleton-line short" />
+
+          <div className="home-recent-list">
+            {latestAgentRuns.length > 0 ? (
+              latestAgentRuns.map((run) => (
+                <button
+                  className="home-recent-item"
+                  key={run.threadId}
+                  onClick={() => onSelectThread(run.workspaceId, run.threadId)}
+                  type="button"
+                >
+                  <div className="home-recent-icon">
+                    <MessageSquare size={16} />
+                  </div>
+                  <div className="home-recent-info">
+                    <div className="home-recent-top">
+                      <span className="home-recent-project">{run.projectName}</span>
+                      {run.groupName && (
+                        <span className="home-recent-group">{run.groupName}</span>
+                      )}
+                      <span className="home-recent-time">
+                        <Clock size={12} />
+                        {formatRelativeTime(run.timestamp)}
+                      </span>
+                    </div>
+                    <div className="home-recent-message">
+                      {run.message.trim() || t("home.agentReplied")}
+                    </div>
+                  </div>
+                  <div className="home-recent-arrow">
+                    <ArrowRight size={14} />
+                  </div>
+                </button>
+              ))
+            ) : isLoadingLatestAgents ? (
+              <div className="home-recent-loading" aria-label={t("home.loadingAgents")}>
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div className="home-recent-skeleton" key={index}>
+                    <div className="home-recent-skeleton-icon" />
+                    <div className="home-recent-skeleton-content">
+                      <div className="home-recent-skeleton-line" />
+                      <div className="home-recent-skeleton-line short" />
+                    </div>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <div className="home-recent-empty">
+                <p>{t("home.noActivity", "No recent activity")}</p>
+              </div>
+            )}
           </div>
-        ) : (
-          <div className="home-latest-empty">
-            <div className="home-latest-empty-title">{t("home.noAgentActivity")}</div>
-            <div className="home-latest-empty-subtitle">
-              {t("home.startThreadToSee")}
-            </div>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );

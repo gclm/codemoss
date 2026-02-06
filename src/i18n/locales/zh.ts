@@ -83,6 +83,10 @@ const zh = {
 
   // 首页
   home: {
+    welcome: "欢迎",
+    subtitle: "今天想构建什么？",
+    latestActivity: "最近活动",
+    noActivity: "暂无最近活动",
     latestAgents: "最近的对话",
     agentReplied: "对话已回复。",
     running: "运行中",
