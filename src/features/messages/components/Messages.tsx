@@ -4,8 +4,7 @@ import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import Check from "lucide-react/dist/esm/icons/check";
-import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
-import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
+
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Diff from "lucide-react/dist/esm/icons/diff";
 import FileDiff from "lucide-react/dist/esm/icons/file-diff";
@@ -117,18 +116,7 @@ type MessageImage = {
   label: string;
 };
 
-type ToolGroupItem = Extract<ConversationItem, { kind: "tool" | "reasoning" | "explore" }>;
-
-type ToolGroup = {
-  id: string;
-  items: ToolGroupItem[];
-  toolCount: number;
-  messageCount: number;
-};
-
-type MessageListEntry =
-  | { kind: "item"; item: ConversationItem }
-  | { kind: "toolGroup"; group: ToolGroup };
+type MessageListEntry = { kind: "item"; item: ConversationItem };
 
 const SCROLL_THRESHOLD_PX = 120;
 const MAX_COMMAND_OUTPUT_LINES = 200;
@@ -178,9 +166,6 @@ function toolNameFromTitle(title: string) {
   return segments.length ? segments[segments.length - 1] : "";
 }
 
-function formatCount(value: number, singular: string, plural: string) {
-  return `${value} ${value === 1 ? singular : plural}`;
-}
 
 function sanitizeReasoningTitle(title: string) {
   return title
@@ -341,10 +326,6 @@ const ImageLightbox = memo(function ImageLightbox({
   );
 });
 
-function isToolGroupItem(item: ConversationItem): item is ToolGroupItem {
-  return item.kind === "tool" || item.kind === "reasoning" || item.kind === "explore";
-}
-
 function mergeExploreItems(
   items: Extract<ConversationItem, { kind: "explore" }>[],
 ): Extract<ConversationItem, { kind: "explore" }> {
@@ -360,81 +341,31 @@ function mergeExploreItems(
   };
 }
 
-function mergeConsecutiveExploreRuns(items: ToolGroupItem[]): ToolGroupItem[] {
-  const result: ToolGroupItem[] = [];
-  let run: Extract<ConversationItem, { kind: "explore" }>[] = [];
+function buildToolGroups(items: ConversationItem[]): MessageListEntry[] {
+  const entries: MessageListEntry[] = [];
+  let exploreBuffer: Extract<ConversationItem, { kind: "explore" }>[] = [];
 
-  const flushRun = () => {
-    if (run.length === 0) {
+  const flushExplores = () => {
+    if (exploreBuffer.length === 0) {
       return;
     }
-    if (run.length === 1) {
-      result.push(run[0]);
+    if (exploreBuffer.length === 1) {
+      entries.push({ kind: "item", item: exploreBuffer[0] });
     } else {
-      result.push(mergeExploreItems(run));
+      entries.push({ kind: "item", item: mergeExploreItems(exploreBuffer) });
     }
-    run = [];
+    exploreBuffer = [];
   };
 
   items.forEach((item) => {
     if (item.kind === "explore") {
-      run.push(item);
-      return;
-    }
-    flushRun();
-    result.push(item);
-  });
-  flushRun();
-  return result;
-}
-
-function buildToolGroups(items: ConversationItem[]): MessageListEntry[] {
-  const entries: MessageListEntry[] = [];
-  let buffer: ToolGroupItem[] = [];
-
-  const flush = () => {
-    if (buffer.length === 0) {
-      return;
-    }
-    const normalizedBuffer = mergeConsecutiveExploreRuns(buffer);
-
-    const toolCount = normalizedBuffer.reduce((total, item) => {
-      if (item.kind === "tool") {
-        return total + 1;
-      }
-      if (item.kind === "explore") {
-        return total + item.entries.length;
-      }
-      return total;
-    }, 0);
-    const messageCount = normalizedBuffer.filter(
-      (item) => item.kind !== "tool" && item.kind !== "explore",
-    ).length;
-    if (toolCount === 0 || normalizedBuffer.length === 1) {
-      normalizedBuffer.forEach((item) => entries.push({ kind: "item", item }));
+      exploreBuffer.push(item);
     } else {
-      entries.push({
-        kind: "toolGroup",
-        group: {
-          id: normalizedBuffer[0].id,
-          items: normalizedBuffer,
-          toolCount,
-          messageCount,
-        },
-      });
-    }
-    buffer = [];
-  };
-
-  items.forEach((item) => {
-    if (isToolGroupItem(item)) {
-      buffer.push(item);
-    } else {
-      flush();
+      flushExplores();
       entries.push({ kind: "item", item });
     }
   });
-  flush();
+  flushExplores();
   return entries;
 }
 
@@ -487,17 +418,38 @@ function buildToolSummary(
       };
     }
     if (toolName) {
+      const actionValue = firstStringField(args, [
+        "query", "pattern", "prompt", "skill", "description", "path", "file_path",
+        "text", "command", "url",
+      ]);
       return {
-        label: "tool",
-        value: toolName,
+        label: toolName,
+        value: actionValue,
         detail: item.detail || "",
       };
     }
   }
 
+  {
+    const toolName = toolNameFromTitle(item.title);
+    if (toolName) {
+      const args = parseToolArgs(item.detail);
+      const actionValue = firstStringField(args, [
+        "query", "pattern", "prompt", "skill", "description", "path", "file_path",
+        "text", "command", "url", "content",
+      ]);
+      return {
+        label: toolName,
+        value: actionValue,
+        detail: item.detail || "",
+        output: item.output || "",
+      };
+    }
+  }
+
   return {
-    label: "tool",
-    value: item.title || "",
+    label: item.title || "tool",
+    value: "",
     detail: item.detail || "",
     output: item.output || "",
   };
@@ -1123,9 +1075,6 @@ export const Messages = memo(function Messages({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const autoScrollRef = useRef(true);
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
-  const [collapsedToolGroups, setCollapsedToolGroups] = useState<Set<string>>(
-    new Set(),
-  );
   const [copiedMessageId, setCopiedMessageId] = useState<string | null>(null);
   const copyTimeoutRef = useRef<number | null>(null);
   const activeUserInputRequestId =
@@ -1171,24 +1120,10 @@ export const Messages = memo(function Messages({
 
   useEffect(() => {
     autoScrollRef.current = true;
-    // 当切换 thread 时，重置折叠状态，确保所有 tool groups 默认展开
-    setCollapsedToolGroups(new Set());
     setExpandedItems(new Set());
   }, [threadId]);
   const toggleExpanded = useCallback((id: string) => {
     setExpandedItems((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) {
-        next.delete(id);
-      } else {
-        next.add(id);
-      }
-      return next;
-    });
-  }, []);
-
-  const toggleToolGroup = useCallback((id: string) => {
-    setCollapsedToolGroups((prev) => {
       const next = new Set(prev);
       if (next.has(id)) {
         next.delete(id);
@@ -1294,42 +1229,6 @@ export const Messages = memo(function Messages({
 
   const groupedItems = buildToolGroups(visibleItems);
 
-  // 当 AI 正在处理时，自动展开包含正在处理中 tool 的 groups
-  useEffect(() => {
-    if (!isThinking) {
-      return;
-    }
-    // 找出所有正在处理中的 tool groups（有未完成的 tool items）
-    const processingGroupIds: string[] = [];
-    for (const entry of groupedItems) {
-      if (entry.kind !== "toolGroup") continue;
-      // 检查是否有未完成的 tool items
-      const hasProcessing = entry.group.items.some((item) => {
-        if (item.kind === "tool") {
-          const hasChanges = (item.changes ?? []).length > 0;
-          return toolStatusTone(item, hasChanges) !== "completed";
-        }
-        return false;
-      });
-      if (hasProcessing) {
-        processingGroupIds.push(entry.group.id);
-      }
-    }
-
-    // 如果有正在处理的 groups 被折叠，自动展开它们
-    if (processingGroupIds.length > 0) {
-      setCollapsedToolGroups((prev) => {
-        const hasCollapsedProcessing = processingGroupIds.some((id) => prev.has(id));
-        if (!hasCollapsedProcessing) {
-          return prev;
-        }
-        const next = new Set(prev);
-        processingGroupIds.forEach((id) => next.delete(id));
-        return next;
-      });
-    }
-  }, [isThinking, groupedItems]);
-
   const hasActiveUserInputRequest = activeUserInputRequestId !== null;
   const userInputNode =
     hasActiveUserInputRequest && onUserInputSubmit ? (
@@ -1410,77 +1309,7 @@ export const Messages = memo(function Messages({
       ref={containerRef}
       onScroll={updateAutoScroll}
     >
-      {groupedItems.map((entry) => {
-        if (entry.kind === "toolGroup") {
-          const { group } = entry;
-          const isCollapsed = collapsedToolGroups.has(group.id);
-
-          // Calculate completion status for progress display
-          const completedCount = group.items.filter((gItem) => {
-            if (gItem.kind === "tool") {
-              const hasChanges = (gItem.changes ?? []).length > 0;
-              return toolStatusTone(gItem, hasChanges) === "completed";
-            }
-            return true; // reasoning/explore items count as completed
-          }).length;
-          const hasErrors = group.items.some((gItem) => {
-            if (gItem.kind === "tool") {
-              const hasChanges = (gItem.changes ?? []).length > 0;
-              return toolStatusTone(gItem, hasChanges) === "failed";
-            }
-            return false;
-          });
-          const groupStatus = hasErrors
-            ? "failed"
-            : completedCount === group.items.length
-              ? "completed"
-              : completedCount > 0
-                ? "processing"
-                : "processing";
-
-          const summaryParts = [
-            formatCount(group.toolCount, t("messages.toolCall"), t("messages.toolCalls")),
-          ];
-          if (group.messageCount > 0) {
-            summaryParts.push(formatCount(group.messageCount, t("messages.message"), t("messages.messages")));
-          }
-          const summaryText = summaryParts.join(", ");
-          const groupBodyId = `tool-group-${group.id}`;
-          const ChevronIcon = isCollapsed ? ChevronDown : ChevronUp;
-          return (
-            <div
-              key={`tool-group-${group.id}`}
-              className={`tool-group ${isCollapsed ? "tool-group-collapsed" : ""}`}
-            >
-              <div className="tool-group-header">
-                <button
-                  type="button"
-                  className="tool-group-toggle"
-                  onClick={() => toggleToolGroup(group.id)}
-                  aria-expanded={!isCollapsed}
-                  aria-controls={groupBodyId}
-                  aria-label={isCollapsed ? t("messages.expandToolCalls") : t("messages.collapseToolCalls")}
-                >
-                  <span className="tool-group-chevron" aria-hidden>
-                    <ChevronIcon size={14} />
-                  </span>
-                  <span className="tool-group-summary">{summaryText}</span>
-                  <span className="tool-group-progress">
-                    {completedCount}/{group.items.length}
-                  </span>
-                  <span className={`tool-inline-dot ${groupStatus}`} aria-hidden />
-                </button>
-              </div>
-              {!isCollapsed && (
-                <div className="tool-group-body" id={groupBodyId}>
-                  {group.items.map(renderItem)}
-                </div>
-              )}
-            </div>
-          );
-        }
-        return renderItem(entry.item);
-      })}
+      {groupedItems.map((entry) => renderItem(entry.item))}
       {userInputNode}
       <WorkingIndicator
         isThinking={isThinking}
