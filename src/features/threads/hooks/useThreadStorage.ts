@@ -43,6 +43,7 @@ export type UseThreadStorageResult = {
     oldThreadId: string,
     newThreadId: string,
   ) => void;
+  autoTitlePendingVersion: number;
 };
 
 type AutoTitlePendingMap = Record<string, number>;
@@ -52,6 +53,7 @@ export function useThreadStorage(): UseThreadStorageResult {
   const pinnedThreadsRef = useRef<PinnedThreadsMap>(loadPinnedThreads());
   const autoTitlePendingRef = useRef<AutoTitlePendingMap>({});
   const [pinnedThreadsVersion, setPinnedThreadsVersion] = useState(0);
+  const [autoTitlePendingVersion, setAutoTitlePendingVersion] = useState(0);
   const customNamesRef = useRef<CustomNamesMap>({});
 
   useEffect(() => {
@@ -163,6 +165,7 @@ export function useThreadStorage(): UseThreadStorageResult {
         [key]: Date.now(),
       };
       autoTitlePendingRef.current = next;
+      setAutoTitlePendingVersion((v) => v + 1);
     },
     [],
   );
@@ -175,6 +178,7 @@ export function useThreadStorage(): UseThreadStorageResult {
       }
       const { [key]: _removed, ...rest } = autoTitlePendingRef.current;
       autoTitlePendingRef.current = rest;
+      setAutoTitlePendingVersion((v) => v + 1);
     },
     [],
   );
@@ -226,5 +230,6 @@ export function useThreadStorage(): UseThreadStorageResult {
     isAutoTitlePending,
     getAutoTitlePendingStartedAt,
     renameAutoTitlePendingKey,
+    autoTitlePendingVersion,
   };
 }

@@ -79,6 +79,7 @@ export function useThreads({
     isAutoTitlePending,
     getAutoTitlePendingStartedAt,
     renameAutoTitlePendingKey,
+    autoTitlePendingVersion,
   } = useThreadStorage();
   void pinnedThreadsVersion;
 
@@ -776,7 +777,7 @@ export function useThreads({
   const isThreadAutoNaming = useCallback(
     (workspaceId: string, threadId: string) =>
       isAutoTitlePending(workspaceId, threadId),
-    [isAutoTitlePending],
+    [isAutoTitlePending, autoTitlePendingVersion],
   );
 
   const handlers = useThreadEventHandlers({

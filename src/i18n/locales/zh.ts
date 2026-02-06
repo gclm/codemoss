@@ -707,6 +707,7 @@ const zh = {
     closeTab: "关闭标签页",
     clear: "清除",
     title: "终端",
+    tabTitle: "终端 {{number}}",
   },
 
   // 更新

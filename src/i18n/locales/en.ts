@@ -707,6 +707,7 @@ const en = {
     closeTab: "Close Tab",
     clear: "Clear",
     title: "Terminal",
+    tabTitle: "Terminal {{number}}",
   },
 
   // Update
