@@ -122,6 +122,11 @@ export function useThreadTurnEvents({
 
   const onTurnCompleted = useCallback(
     (_workspaceId: string, threadId: string, _turnId: string) => {
+      dispatch({
+        type: "finalizePendingToolStatuses",
+        threadId,
+        status: "completed",
+      });
       markProcessing(threadId, false);
       setActiveTurnId(threadId, null);
       pendingInterruptsRef.current.delete(threadId);
@@ -183,6 +188,11 @@ export function useThreadTurnEvents({
         return;
       }
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
+      dispatch({
+        type: "finalizePendingToolStatuses",
+        threadId,
+        status: "failed",
+      });
       markProcessing(threadId, false);
       markReviewing(threadId, false);
       setActiveTurnId(threadId, null);

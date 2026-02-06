@@ -108,6 +108,22 @@ function maybeRenameThreadFromAgent({
     : threadsByWorkspace;
 }
 
+function isFailedToolStatus(status: string) {
+  return /(fail|error|cancel(?:led)?|abort|timeout|timed[_ -]?out)/.test(status);
+}
+
+function isCompletedToolStatus(status: string) {
+  return /(complete|completed|success|done|finish(?:ed)?|succeed(?:ed)?)/.test(
+    status,
+  );
+}
+
+function isPendingToolStatus(status: string) {
+  return /(pending|running|processing|started|in[_ -]?progress|inprogress|queued)/.test(
+    status,
+  );
+}
+
 type ThreadActivityStatus = {
   isProcessing: boolean;
   hasUnread: boolean;
@@ -149,6 +165,11 @@ export type ThreadAction =
       threadId: string;
       isProcessing: boolean;
       timestamp: number;
+    }
+  | {
+      type: "finalizePendingToolStatuses";
+      threadId: string;
+      status: "completed" | "failed";
     }
   | { type: "markReviewing"; threadId: string; isReviewing: boolean }
   | { type: "markUnread"; threadId: string; hasUnread: boolean }
@@ -686,6 +707,46 @@ export function threadReducer(state: ThreadState, action: ThreadAction): ThreadS
             processingStartedAt: null,
             lastDurationMs: nextDuration,
           },
+        },
+      };
+    }
+    case "finalizePendingToolStatuses": {
+      const list = state.itemsByThread[action.threadId] ?? [];
+      let didChange = false;
+
+      const nextItems = list.map((item) => {
+        if (item.kind !== "tool") {
+          return item;
+        }
+
+        const normalizedStatus = (item.status ?? "").toLowerCase();
+        if (
+          isFailedToolStatus(normalizedStatus) ||
+          isCompletedToolStatus(normalizedStatus)
+        ) {
+          return item;
+        }
+
+        if (!normalizedStatus || isPendingToolStatus(normalizedStatus)) {
+          didChange = true;
+          return {
+            ...item,
+            status: action.status,
+          };
+        }
+
+        return item;
+      });
+
+      if (!didChange) {
+        return state;
+      }
+
+      return {
+        ...state,
+        itemsByThread: {
+          ...state.itemsByThread,
+          [action.threadId]: prepareThreadItems(nextItems),
         },
       };
     }

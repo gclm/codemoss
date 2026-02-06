@@ -506,4 +506,102 @@ describe("threadReducer", () => {
     expect(next.threadStatusById["claude-pending-b"]?.isProcessing).toBe(true);
     expect(next.threadStatusById["claude:session-1"]?.isProcessing).toBe(false);
   });
+
+  it("finalizes pending tool statuses to completed", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "tool-1",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Read",
+            detail: "{}",
+            status: "started",
+          },
+          {
+            id: "tool-2",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Bash",
+            detail: "{}",
+            status: "running",
+          },
+          {
+            id: "tool-3",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Search",
+            detail: "{}",
+            status: "completed",
+          },
+          {
+            id: "tool-4",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Edit",
+            detail: "{}",
+            status: "failed",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "finalizePendingToolStatuses",
+      threadId: "thread-1",
+      status: "completed",
+    });
+
+    const tools = (next.itemsByThread["thread-1"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "tool" }> =>
+        item.kind === "tool",
+    );
+
+    expect(tools.find((item) => item.id === "tool-1")?.status).toBe("completed");
+    expect(tools.find((item) => item.id === "tool-2")?.status).toBe("completed");
+    expect(tools.find((item) => item.id === "tool-3")?.status).toBe("completed");
+    expect(tools.find((item) => item.id === "tool-4")?.status).toBe("failed");
+  });
+
+  it("finalizes pending tool statuses to failed", () => {
+    const base: ThreadState = {
+      ...initialState,
+      itemsByThread: {
+        "thread-1": [
+          {
+            id: "tool-1",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Read",
+            detail: "{}",
+            status: "started",
+          },
+          {
+            id: "tool-2",
+            kind: "tool",
+            toolType: "mcpToolCall",
+            title: "Tool: Search",
+            detail: "{}",
+            status: "in_progress",
+          },
+        ],
+      },
+    };
+
+    const next = threadReducer(base, {
+      type: "finalizePendingToolStatuses",
+      threadId: "thread-1",
+      status: "failed",
+    });
+
+    const tools = (next.itemsByThread["thread-1"] ?? []).filter(
+      (item): item is Extract<ConversationItem, { kind: "tool" }> =>
+        item.kind === "tool",
+    );
+
+    expect(tools.find((item) => item.id === "tool-1")?.status).toBe("failed");
+    expect(tools.find((item) => item.id === "tool-2")?.status).toBe("failed");
+  });
 });

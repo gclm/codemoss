@@ -200,13 +200,18 @@ describe("useThreadTurnEvents", () => {
   });
 
   it("clears pending interrupt and active turn on turn completed", () => {
-    const { result, markProcessing, setActiveTurnId, pendingInterruptsRef } =
+    const { result, dispatch, markProcessing, setActiveTurnId, pendingInterruptsRef } =
       makeOptions({ pendingInterrupts: ["thread-1"] });
 
     act(() => {
       result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
     });
 
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "finalizePendingToolStatuses",
+      threadId: "thread-1",
+      status: "completed",
+    });
     expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
     expect(pendingInterruptsRef.current.has("thread-1")).toBe(false);
@@ -343,6 +348,11 @@ describe("useThreadTurnEvents", () => {
       workspaceId: "ws-1",
       threadId: "thread-1",
       engine: "codex",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "finalizePendingToolStatuses",
+      threadId: "thread-1",
+      status: "failed",
     });
     expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
     expect(markReviewing).toHaveBeenCalledWith("thread-1", false);
