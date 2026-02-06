@@ -574,7 +574,7 @@ export function useThreadActions({
         try {
           const claudeResponse = await listClaudeSessionsService(
             workspace.path,
-            20,
+            50,
           );
           const claudeSessions = Array.isArray(claudeResponse)
             ? claudeResponse

@@ -208,8 +208,8 @@ async fn scan_session_file(path: &Path) -> Option<ClaudeSessionSummary> {
         }
     }
 
-    // Skip sessions with fewer than 2 messages
-    if message_count < 2 {
+    // Skip completely empty sessions (no messages at all)
+    if message_count < 1 {
         return None;
     }
 
