@@ -84,10 +84,21 @@ export function KanbanBoard({
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [createDefaultStatus, setCreateDefaultStatus] =
     useState<KanbanTaskStatus>("todo");
+  const [searchQuery, setSearchQuery] = useState("");
 
   const selectedTask = selectedTaskId
     ? tasks.find((t) => t.id === selectedTaskId) ?? null
     : null;
+
+  const filteredTasks = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (q.length === 0) return tasks;
+    return tasks.filter(
+      (task) =>
+        task.title.toLowerCase().includes(q) ||
+        task.description.toLowerCase().includes(q)
+    );
+  }, [tasks, searchQuery]);
 
   const tasksByColumn = useMemo(() => {
     const map: Record<KanbanTaskStatus, KanbanTask[]> = {
@@ -97,7 +108,7 @@ export function KanbanBoard({
       done: [],
       cancelled: [],
     };
-    for (const task of tasks) {
+    for (const task of filteredTasks) {
       if (map[task.status]) {
         map[task.status].push(task);
       }
@@ -106,7 +117,7 @@ export function KanbanBoard({
       map[key].sort((a, b) => a.sortOrder - b.sortOrder);
     }
     return map;
-  }, [tasks]);
+  }, [filteredTasks]);
 
   const handleDragEnd = useCallback(
     (result: DropResult) => {
@@ -184,6 +195,8 @@ export function KanbanBoard({
         groupedWorkspaces={groupedWorkspaces}
         activeWorkspaceId={activeWorkspaceId}
         onSelectWorkspace={onSelectWorkspace}
+        searchQuery={searchQuery}
+        onSearchChange={setSearchQuery}
       />
       <div className="kanban-board-body">
         <div className="kanban-board-columns-area">

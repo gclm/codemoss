@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Search } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { AppMode, WorkspaceInfo } from "../../../types";
 import { KanbanModeToggle } from "./KanbanModeToggle";
@@ -17,6 +17,8 @@ type KanbanBoardHeaderProps = {
   groupedWorkspaces?: WorkspaceGroupSection[];
   activeWorkspaceId?: string | null;
   onSelectWorkspace?: (workspaceId: string) => void;
+  searchQuery: string;
+  onSearchChange: (query: string) => void;
 };
 
 export function KanbanBoardHeader({
@@ -26,6 +28,8 @@ export function KanbanBoardHeader({
   groupedWorkspaces,
   activeWorkspaceId,
   onSelectWorkspace,
+  searchQuery,
+  onSearchChange,
 }: KanbanBoardHeaderProps) {
   const { t } = useTranslation();
   const [projectMenuOpen, setProjectMenuOpen] = useState(false);
@@ -160,6 +164,18 @@ export function KanbanBoardHeader({
         ) : (
           <h2 className="kanban-board-title">{workspace.name}</h2>
         )}
+      </div>
+      <div className="kanban-board-header-center">
+        <div className="kanban-search-box">
+          <Search size={15} className="kanban-search-icon" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => onSearchChange(e.target.value)}
+            placeholder="搜索..."
+            className="kanban-search-input"
+          />
+        </div>
       </div>
     </div>
   );

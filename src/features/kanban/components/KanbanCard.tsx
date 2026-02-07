@@ -3,6 +3,8 @@ import { useTranslation } from "react-i18next";
 import { Draggable } from "@hello-pangea/dnd";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 import type { KanbanTask } from "../types";
+import type { EngineType } from "../../../types";
+import { EngineIcon } from "../../engine/components/EngineIcon";
 
 type KanbanCardProps = {
   task: KanbanTask;
@@ -12,6 +14,13 @@ type KanbanCardProps = {
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
+};
+
+const ENGINE_NAMES: Record<EngineType, string> = {
+  claude: "Claude Code",
+  codex: "Codex",
+  gemini: "Gemini",
+  opencode: "OpenCode",
 };
 
 export function KanbanCard({ task, index, isSelected, isProcessing, onSelect, onEdit, onDelete }: KanbanCardProps) {
@@ -41,6 +50,12 @@ export function KanbanCard({ task, index, isSelected, isProcessing, onSelect, on
           onClick={onSelect}
         >
           <div className="kanban-card-header">
+            <span
+              className="kanban-card-engine"
+              title={ENGINE_NAMES[task.engineType] ?? task.engineType}
+            >
+              <EngineIcon engine={task.engineType} size={15} />
+            </span>
             <span className="kanban-card-title">{task.title}</span>
             <div className="kanban-card-menu" ref={menuRef}>
               <button

@@ -1582,7 +1582,19 @@ function MainApp() {
       selectWorkspace(task.workspaceId);
 
       const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
-      setActiveEngine(engine);
+      await setActiveEngine(engine);
+
+      // Apply the model that was selected when the task was created
+      if (task.modelId) {
+        if (engine === "codex") {
+          setSelectedModelId(task.modelId);
+        } else {
+          setEngineSelectedModelIdByType((prev) => ({
+            ...prev,
+            [engine]: task.modelId,
+          }));
+        }
+      }
 
       if (task.threadId) {
         let resolvedThreadId = task.threadId;
@@ -1624,6 +1636,8 @@ function MainApp() {
       kanbanUpdateTask,
       activeEngine,
       setActiveEngine,
+      setSelectedModelId,
+      setEngineSelectedModelIdByType,
       threadStatusById,
       threadsByWorkspace,
       kanbanTasks,
@@ -1647,6 +1661,20 @@ function MainApp() {
           selectWorkspace(task.workspaceId);
 
           const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
+          await setActiveEngine(engine);
+
+          // Apply the model that was selected when the task was created
+          if (task.modelId) {
+            if (engine === "codex") {
+              setSelectedModelId(task.modelId);
+            } else {
+              setEngineSelectedModelIdByType((prev) => ({
+                ...prev,
+                [engine]: task.modelId,
+              }));
+            }
+          }
+
           const threadId = await startThreadForWorkspace(task.workspaceId, { engine });
           if (!threadId) return;
           kanbanUpdateTask(task.id, { threadId });
@@ -1673,6 +1701,9 @@ function MainApp() {
       connectWorkspace,
       selectWorkspace,
       activeEngine,
+      setActiveEngine,
+      setSelectedModelId,
+      setEngineSelectedModelIdByType,
       startThreadForWorkspace,
       setActiveThreadId,
       sendUserMessageToThread,
@@ -1757,15 +1788,32 @@ function MainApp() {
         selectWorkspace(task.workspaceId);
 
         const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
-        setActiveEngine(engine);
+        await setActiveEngine(engine);
+
+        // Apply the model that was selected when the task was created
+        if (task.modelId) {
+          if (engine === "codex") {
+            setSelectedModelId(task.modelId);
+          } else {
+            setEngineSelectedModelIdByType((prev) => ({
+              ...prev,
+              [engine]: task.modelId,
+            }));
+          }
+        }
 
         let threadId = task.threadId;
         if (!threadId) {
-          threadId = await startThreadForWorkspace(task.workspaceId, { engine });
+          // activate: false — this is background execution, must not switch
+          // the global active thread (which would hijack any conversation
+          // panel the user is currently viewing).
+          threadId = await startThreadForWorkspace(task.workspaceId, {
+            engine,
+            activate: false,
+          });
           if (!threadId) return;
           kanbanUpdateTask(task.id, { threadId });
         }
-        setActiveThreadId(threadId, task.workspaceId);
 
         const firstMessage = task.description?.trim() || task.title;
         if (firstMessage) {
@@ -1783,8 +1831,9 @@ function MainApp() {
       selectWorkspace,
       activeEngine,
       setActiveEngine,
+      setSelectedModelId,
+      setEngineSelectedModelIdByType,
       startThreadForWorkspace,
-      setActiveThreadId,
       kanbanUpdateTask,
       sendUserMessageToThread,
     ]
