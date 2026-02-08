@@ -78,6 +78,11 @@ const en = {
     signIn: "Sign in",
     account: "Account",
     session: "Session",
+    currentSession: "Current session",
+    expandCurrentSession: "Expand current session",
+    collapseCurrentSession: "Collapse current session",
+    expandAllSections: "Expand all sections",
+    collapseAllSections: "Collapse all sections",
     weekly: "Weekly",
   },
 

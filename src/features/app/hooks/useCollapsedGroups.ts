@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { getClientStoreSync, writeClientStoreValue } from "../../../services/clientStorage";
 
-export function useCollapsedGroups(_storageKey: string) {
+export function useCollapsedGroups() {
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(() => {
     const stored = getClientStoreSync<string[]>("layout", "collapsedGroups");
     if (Array.isArray(stored)) {
@@ -33,5 +33,13 @@ export function useCollapsedGroups(_storageKey: string) {
     [persistCollapsedGroups],
   );
 
-  return { collapsedGroups, toggleGroupCollapse };
+  const replaceCollapsedGroups = useCallback(
+    (nextGroups: Set<string>) => {
+      setCollapsedGroups(new Set(nextGroups));
+      persistCollapsedGroups(nextGroups);
+    },
+    [persistCollapsedGroups],
+  );
+
+  return { collapsedGroups, toggleGroupCollapse, replaceCollapsedGroups };
 }

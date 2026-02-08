@@ -1,3 +1,4 @@
+import GitBranch from "lucide-react/dist/esm/icons/git-branch";
 import type { MouseEvent } from "react";
 
 import type { WorkspaceInfo } from "../../../types";
@@ -36,6 +37,7 @@ export function WorktreeCard({
         onClick={() => {
           if (!isDeleting) {
             onSelectWorkspace(worktree.id);
+            onToggleWorkspaceCollapse(worktree.id, !worktreeCollapsed);
           }
         }}
         onContextMenu={(event) => {
@@ -50,9 +52,11 @@ export function WorktreeCard({
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
             onSelectWorkspace(worktree.id);
+            onToggleWorkspaceCollapse(worktree.id, !worktreeCollapsed);
           }
         }}
       >
+        <GitBranch className="worktree-node-icon" aria-hidden />
         <div className="worktree-label">{worktreeBranch || worktree.name}</div>
         <div className="worktree-actions">
           {isDeleting ? (

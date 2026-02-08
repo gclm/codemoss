@@ -78,6 +78,11 @@ const zh = {
     signIn: "登录",
     account: "账户",
     session: "会话",
+    currentSession: "当前会话",
+    expandCurrentSession: "展开当前会话",
+    collapseCurrentSession: "折叠当前会话",
+    expandAllSections: "展开全部区块",
+    collapseAllSections: "折叠全部区块",
     weekly: "每周",
   },
 

@@ -18,7 +18,10 @@ describe("WorktreeSection", () => {
   it("does not render older thread controls for worktrees", () => {
     render(
       <WorktreeSection
+        parentWorkspaceId="workspace-1"
         worktrees={[worktree]}
+        isSectionCollapsed={false}
+        onToggleSectionCollapse={vi.fn()}
         deletingWorktreeIds={new Set()}
         threadsByWorkspace={{ [worktree.id]: [] }}
         threadStatusById={{}}

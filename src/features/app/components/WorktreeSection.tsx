@@ -19,7 +19,10 @@ type ThreadRowsResult = {
 };
 
 type WorktreeSectionProps = {
+  parentWorkspaceId: string;
   worktrees: WorkspaceInfo[];
+  isSectionCollapsed: boolean;
+  onToggleSectionCollapse: (workspaceId: string) => void;
   deletingWorktreeIds: Set<string>;
   threadsByWorkspace: Record<string, ThreadSummary[]>;
   threadStatusById: ThreadStatusMap;
@@ -55,7 +58,10 @@ type WorktreeSectionProps = {
 };
 
 export function WorktreeSection({
+  parentWorkspaceId,
   worktrees,
+  isSectionCollapsed,
+  onToggleSectionCollapse,
   deletingWorktreeIds,
   threadsByWorkspace,
   threadStatusById,
@@ -85,76 +91,88 @@ export function WorktreeSection({
 
   return (
     <div className="worktree-section">
-      <div className="worktree-header">
+      <button
+        type="button"
+        className={`worktree-header ${isSectionCollapsed ? "collapsed" : "expanded"}`}
+        onClick={() => {
+          onToggleSectionCollapse(parentWorkspaceId);
+        }}
+        aria-expanded={!isSectionCollapsed}
+        aria-label={isSectionCollapsed ? "Expand worktrees" : "Collapse worktrees"}
+      >
         <Layers className="worktree-header-icon" aria-hidden />
-        Worktrees
-      </div>
-      <div className="worktree-list">
-        {worktrees.map((worktree) => {
-          const worktreeThreads = threadsByWorkspace[worktree.id] ?? [];
-          const worktreeCollapsed = worktree.settings.sidebarCollapsed;
-          const isLoadingWorktreeThreads =
-            threadListLoadingByWorkspace[worktree.id] ?? false;
-          const showWorktreeLoader =
-            !worktreeCollapsed &&
-            isLoadingWorktreeThreads &&
-            worktreeThreads.length === 0;
-          const worktreeNextCursor =
-            threadListCursorByWorkspace[worktree.id] ?? null;
-          const showWorktreeThreadList =
-            !worktreeCollapsed &&
-            (worktreeThreads.length > 0 || Boolean(worktreeNextCursor));
-          const isWorktreePaging =
-            threadListPagingByWorkspace[worktree.id] ?? false;
-          const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
-          const {
-            unpinnedRows: worktreeThreadRows,
-            totalRoots: totalWorktreeRoots,
-          } = getThreadRows(
-            worktreeThreads,
-            isWorktreeExpanded,
-            worktree.id,
-            getPinTimestamp,
-          );
+        <span className="worktree-header-text">worktrees</span>
+        <span className="worktree-header-toggle" aria-hidden>
+          ›
+        </span>
+      </button>
+      <div className={`worktree-list ${isSectionCollapsed ? "collapsed" : "expanded"}`}>
+        {!isSectionCollapsed &&
+          worktrees.map((worktree) => {
+            const worktreeThreads = threadsByWorkspace[worktree.id] ?? [];
+            const worktreeCollapsed = worktree.settings.sidebarCollapsed;
+            const isLoadingWorktreeThreads =
+              threadListLoadingByWorkspace[worktree.id] ?? false;
+            const showWorktreeLoader =
+              !worktreeCollapsed &&
+              isLoadingWorktreeThreads &&
+              worktreeThreads.length === 0;
+            const worktreeNextCursor =
+              threadListCursorByWorkspace[worktree.id] ?? null;
+            const showWorktreeThreadList =
+              !worktreeCollapsed &&
+              (worktreeThreads.length > 0 || Boolean(worktreeNextCursor));
+            const isWorktreePaging =
+              threadListPagingByWorkspace[worktree.id] ?? false;
+            const isWorktreeExpanded = expandedWorkspaces.has(worktree.id);
+            const {
+              unpinnedRows: worktreeThreadRows,
+              totalRoots: totalWorktreeRoots,
+            } = getThreadRows(
+              worktreeThreads,
+              isWorktreeExpanded,
+              worktree.id,
+              getPinTimestamp,
+            );
 
-          return (
-            <WorktreeCard
-              key={worktree.id}
-              worktree={worktree}
-              isActive={worktree.id === activeWorkspaceId}
-              isDeleting={deletingWorktreeIds.has(worktree.id)}
-              onSelectWorkspace={onSelectWorkspace}
-              onShowWorktreeMenu={onShowWorktreeMenu}
-              onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
-              onConnectWorkspace={onConnectWorkspace}
-            >
-              {showWorktreeThreadList && (
-                <ThreadList
-                  workspaceId={worktree.id}
-                  pinnedRows={[]}
-                  unpinnedRows={worktreeThreadRows}
-                  totalThreadRoots={totalWorktreeRoots}
-                  isExpanded={isWorktreeExpanded}
-                  nextCursor={worktreeNextCursor}
-                  isPaging={isWorktreePaging}
-                  nested
-                  showLoadOlder={false}
-                  activeWorkspaceId={activeWorkspaceId}
-                  activeThreadId={activeThreadId}
-                  threadStatusById={threadStatusById}
-                  getThreadTime={getThreadTime}
-                  isThreadPinned={isThreadPinned}
-                  isThreadAutoNaming={isThreadAutoNaming}
-                  onToggleExpanded={onToggleExpanded}
-                  onLoadOlderThreads={onLoadOlderThreads}
-                  onSelectThread={onSelectThread}
-                  onShowThreadMenu={onShowThreadMenu}
-                />
-              )}
-              {showWorktreeLoader && <ThreadLoading nested />}
-            </WorktreeCard>
-          );
-        })}
+            return (
+              <WorktreeCard
+                key={worktree.id}
+                worktree={worktree}
+                isActive={worktree.id === activeWorkspaceId}
+                isDeleting={deletingWorktreeIds.has(worktree.id)}
+                onSelectWorkspace={onSelectWorkspace}
+                onShowWorktreeMenu={onShowWorktreeMenu}
+                onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
+                onConnectWorkspace={onConnectWorkspace}
+              >
+                {showWorktreeThreadList && (
+                  <ThreadList
+                    workspaceId={worktree.id}
+                    pinnedRows={[]}
+                    unpinnedRows={worktreeThreadRows}
+                    totalThreadRoots={totalWorktreeRoots}
+                    isExpanded={isWorktreeExpanded}
+                    nextCursor={worktreeNextCursor}
+                    isPaging={isWorktreePaging}
+                    nested
+                    showLoadOlder={false}
+                    activeWorkspaceId={activeWorkspaceId}
+                    activeThreadId={activeThreadId}
+                    threadStatusById={threadStatusById}
+                    getThreadTime={getThreadTime}
+                    isThreadPinned={isThreadPinned}
+                    isThreadAutoNaming={isThreadAutoNaming}
+                    onToggleExpanded={onToggleExpanded}
+                    onLoadOlderThreads={onLoadOlderThreads}
+                    onSelectThread={onSelectThread}
+                    onShowThreadMenu={onShowThreadMenu}
+                  />
+                )}
+                {showWorktreeLoader && <ThreadLoading nested />}
+              </WorktreeCard>
+            );
+          })}
       </div>
     </div>
   );

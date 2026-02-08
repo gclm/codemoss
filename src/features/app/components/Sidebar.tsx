@@ -5,7 +5,7 @@ import type {
   ThreadSummary,
   WorkspaceInfo,
 } from "../../../types";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { RefObject } from "react";
 import { useTranslation } from "react-i18next";
 import { SidebarCornerActions } from "./SidebarCornerActions";
@@ -23,9 +23,7 @@ import { useSidebarScrollFade } from "../hooks/useSidebarScrollFade";
 import { useThreadRows } from "../hooks/useThreadRows";
 import { formatRelativeTimeShort } from "../../../utils/time";
 
-const COLLAPSED_GROUPS_STORAGE_KEY = "codexmonitor.collapsedGroups";
 const UNGROUPED_COLLAPSE_ID = "__ungrouped__";
-const ADD_MENU_WIDTH = 200;
 
 type WorkspaceGroupSection = {
   id: string | null;
@@ -57,8 +55,7 @@ type SidebarProps = {
   accountSwitching: boolean;
   onOpenSettings: () => void;
   onOpenDebug: () => void;
-  // showDebugButton: boolean; // Removed prop to force hide
-  showDebugButton?: boolean; // Kept as optional for compatibility but ignored
+  showDebugButton?: boolean;
   showTerminalButton?: boolean;
   isTerminalOpen?: boolean;
   onToggleTerminal?: () => void;
@@ -115,7 +112,6 @@ export function Sidebar({
   accountSwitching,
   onOpenSettings,
   onOpenDebug,
-  // showDebugButton, // Unused
   showTerminalButton,
   isTerminalOpen,
   onToggleTerminal,
@@ -156,19 +152,17 @@ export function Sidebar({
   const [expandedWorkspaces, setExpandedWorkspaces] = useState(
     new Set<string>(),
   );
+  const [collapsedWorktreeSections, setCollapsedWorktreeSections] = useState(
+    new Set<string>(),
+  );
+  const [collapsedSessionSections, setCollapsedSessionSections] = useState(
+    new Set<string>(),
+  );
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [isSearchOpen, setIsSearchOpen] = useState(false);
-  const [addMenuAnchor, setAddMenuAnchor] = useState<{
-    workspaceId: string;
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const addMenuRef = useRef<HTMLDivElement | null>(null);
-  const { collapsedGroups, toggleGroupCollapse } = useCollapsedGroups(
-    COLLAPSED_GROUPS_STORAGE_KEY,
-  );
+  const { collapsedGroups, toggleGroupCollapse, replaceCollapsedGroups } =
+    useCollapsedGroups();
   const { getThreadRows } = useThreadRows(threadParentById);
   const { showThreadMenu, showWorkspaceMenu, showWorktreeMenu } =
     useSidebarMenus({
@@ -359,6 +353,104 @@ export function Sidebar({
     });
   }, []);
 
+  const handleToggleWorktreeSection = useCallback((workspaceId: string) => {
+    setCollapsedWorktreeSections((previous) => {
+      const next = new Set(previous);
+      if (next.has(workspaceId)) {
+        next.delete(workspaceId);
+      } else {
+        next.add(workspaceId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleToggleSessionSection = useCallback((workspaceId: string) => {
+    setCollapsedSessionSections((previous) => {
+      const next = new Set(previous);
+      if (next.has(workspaceId)) {
+        next.delete(workspaceId);
+      } else {
+        next.add(workspaceId);
+      }
+      return next;
+    });
+  }, []);
+
+  const rootWorkspaceIds = useMemo(
+    () =>
+      groupedWorkspaces.flatMap((group) =>
+        group.workspaces.map((workspace) => workspace.id),
+      ),
+    [groupedWorkspaces],
+  );
+
+  const allGroupToggleIds = useMemo(() => {
+    const ids = new Set<string>();
+    groupedWorkspaces.forEach((group) => {
+      const showGroupHeader = Boolean(group.id) || hasWorkspaceGroups;
+      if (!showGroupHeader) {
+        return;
+      }
+      ids.add(group.id ?? UNGROUPED_COLLAPSE_ID);
+    });
+    return Array.from(ids);
+  }, [groupedWorkspaces, hasWorkspaceGroups]);
+
+  const isAllCollapsed = useMemo(() => {
+    const allWorkspaceCollapsed = workspaces.every(
+      (workspace) => workspace.settings.sidebarCollapsed,
+    );
+    const allWorktreeSectionCollapsed = rootWorkspaceIds.every((id) =>
+      collapsedWorktreeSections.has(id),
+    );
+    const allSessionSectionCollapsed = rootWorkspaceIds.every((id) =>
+      collapsedSessionSections.has(id),
+    );
+    const allWorkspaceGroupCollapsed = allGroupToggleIds.every((id) =>
+      collapsedGroups.has(id),
+    );
+    return (
+      allWorkspaceCollapsed &&
+      allWorktreeSectionCollapsed &&
+      allSessionSectionCollapsed &&
+      allWorkspaceGroupCollapsed
+    );
+  }, [
+    workspaces,
+    rootWorkspaceIds,
+    collapsedWorktreeSections,
+    collapsedSessionSections,
+    allGroupToggleIds,
+    collapsedGroups,
+  ]);
+
+  const handleToggleCollapseAll = useCallback(() => {
+    const shouldCollapse = !isAllCollapsed;
+    workspaces.forEach((workspace) => {
+      const currentlyCollapsed = workspace.settings.sidebarCollapsed;
+      if (currentlyCollapsed !== shouldCollapse) {
+        onToggleWorkspaceCollapse(workspace.id, shouldCollapse);
+      }
+    });
+    setCollapsedWorktreeSections(
+      shouldCollapse ? new Set(rootWorkspaceIds) : new Set<string>(),
+    );
+    setCollapsedSessionSections(
+      shouldCollapse ? new Set(rootWorkspaceIds) : new Set<string>(),
+    );
+    replaceCollapsedGroups(
+      shouldCollapse ? new Set(allGroupToggleIds) : new Set<string>(),
+    );
+  }, [
+    allGroupToggleIds,
+    isAllCollapsed,
+    onToggleWorkspaceCollapse,
+    replaceCollapsedGroups,
+    rootWorkspaceIds,
+    workspaces,
+  ]);
+
   const getThreadTime = useCallback(
     (thread: ThreadSummary) => {
       const timestamp = thread.updatedAt ?? null;
@@ -366,25 +458,6 @@ export function Sidebar({
     },
     [],
   );
-
-  useEffect(() => {
-    if (!addMenuAnchor) {
-      return;
-    }
-    function handlePointerDown(event: Event) {
-      const target = event.target as Node | null;
-      if (addMenuRef.current && target && addMenuRef.current.contains(target)) {
-        return;
-      }
-      setAddMenuAnchor(null);
-    }
-    window.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("scroll", handlePointerDown, true);
-    return () => {
-      window.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("scroll", handlePointerDown, true);
-    };
-  }, [addMenuAnchor]);
 
   useEffect(() => {
     if (!isSearchOpen && searchQuery) {
@@ -472,6 +545,28 @@ export function Sidebar({
         <div className="sidebar-section-header">
           <div className="sidebar-section-title">{t("sidebar.projects")}</div>
           <button
+            className="sidebar-title-add sidebar-title-toggle-all"
+            onClick={handleToggleCollapseAll}
+            data-tauri-drag-region="false"
+            aria-label={
+              isAllCollapsed
+                ? t("sidebar.expandAllSections")
+                : t("sidebar.collapseAllSections")
+            }
+            type="button"
+            title={
+              isAllCollapsed
+                ? t("sidebar.expandAllSections")
+                : t("sidebar.collapseAllSections")
+            }
+          >
+            <span
+              className={`codicon ${isAllCollapsed ? "codicon-expand-all" : "codicon-collapse-all"}`}
+              aria-hidden
+              style={{ fontSize: "14px" }}
+            />
+          </button>
+          <button
             className="sidebar-title-add"
             onClick={onAddWorkspace}
             data-tauri-drag-region="false"
@@ -540,7 +635,12 @@ export function Sidebar({
                     !isCollapsed && isLoadingThreads && threads.length === 0;
                   const isPaging = threadListPagingByWorkspace[entry.id] ?? false;
                   const worktrees = worktreesByParent.get(entry.id) ?? [];
-                  const addMenuOpen = addMenuAnchor?.workspaceId === entry.id;
+                  const isWorktreeSectionCollapsed =
+                    collapsedWorktreeSections.has(entry.id);
+                  const isSessionSectionCollapsed =
+                    collapsedSessionSections.has(entry.id);
+                  const showSessionSection =
+                    !isCollapsed && (showThreadList || showThreadLoader);
 
                   return (
                     <WorkspaceCard
@@ -549,18 +649,17 @@ export function Sidebar({
                       workspaceName={renderHighlightedName(entry.name)}
                       isActive={entry.id === activeWorkspaceId}
                       isCollapsed={isCollapsed}
-                      addMenuOpen={addMenuOpen}
-                      addMenuWidth={ADD_MENU_WIDTH}
                       onSelectWorkspace={onSelectWorkspace}
                       onShowWorkspaceMenu={showWorkspaceMenu}
                       onToggleWorkspaceCollapse={onToggleWorkspaceCollapse}
-                      onConnectWorkspace={onConnectWorkspace}
                       onAddAgent={onAddAgent}
                     >
-                      {/* Removed addMenu logic */}
                       {!isCollapsed && worktrees.length > 0 && (
                         <WorktreeSection
+                          parentWorkspaceId={entry.id}
                           worktrees={worktrees}
+                          isSectionCollapsed={isWorktreeSectionCollapsed}
+                          onToggleSectionCollapse={handleToggleWorktreeSection}
                           deletingWorktreeIds={deletingWorktreeIds}
                           threadsByWorkspace={threadsByWorkspace}
                           threadStatusById={threadStatusById}
@@ -585,28 +684,60 @@ export function Sidebar({
                           onLoadOlderThreads={onLoadOlderThreads}
                         />
                       )}
-                      {showThreadList && (
-                        <ThreadList
-                          workspaceId={entry.id}
-                          pinnedRows={[]}
-                          unpinnedRows={unpinnedRows}
-                          totalThreadRoots={totalThreadRoots}
-                          isExpanded={isExpanded}
-                          nextCursor={nextCursor}
-                          isPaging={isPaging}
-                          activeWorkspaceId={activeWorkspaceId}
-                          activeThreadId={activeThreadId}
-                          threadStatusById={threadStatusById}
-                          getThreadTime={getThreadTime}
-                          isThreadPinned={isThreadPinned}
-                          isThreadAutoNaming={isThreadAutoNaming}
-                          onToggleExpanded={handleToggleExpanded}
-                          onLoadOlderThreads={onLoadOlderThreads}
-                          onSelectThread={onSelectThread}
-                          onShowThreadMenu={showThreadMenu}
-                        />
+                      {showSessionSection && (
+                        <div className="workspace-session-section">
+                          <button
+                            type="button"
+                            className={`sidebar-section-header sidebar-section-toggle ${
+                              isSessionSectionCollapsed ? "collapsed" : "expanded"
+                            }`}
+                            onClick={() => {
+                              handleToggleSessionSection(entry.id);
+                            }}
+                            aria-expanded={!isSessionSectionCollapsed}
+                            aria-label={
+                              isSessionSectionCollapsed
+                                ? t("sidebar.expandCurrentSession")
+                                : t("sidebar.collapseCurrentSession")
+                            }
+                          >
+                            <div className="sidebar-section-title">
+                              <span
+                                className="codicon codicon-comment-discussion sidebar-section-title-icon"
+                                aria-hidden
+                              />
+                              {t("sidebar.currentSession")}
+                            </div>
+                            <span className="sidebar-section-chevron" aria-hidden>
+                              ›
+                            </span>
+                          </button>
+                          {!isSessionSectionCollapsed && showThreadList && (
+                            <ThreadList
+                              workspaceId={entry.id}
+                              pinnedRows={[]}
+                              unpinnedRows={unpinnedRows}
+                              totalThreadRoots={totalThreadRoots}
+                              isExpanded={isExpanded}
+                              nextCursor={nextCursor}
+                              isPaging={isPaging}
+                              activeWorkspaceId={activeWorkspaceId}
+                              activeThreadId={activeThreadId}
+                              threadStatusById={threadStatusById}
+                              getThreadTime={getThreadTime}
+                              isThreadPinned={isThreadPinned}
+                              isThreadAutoNaming={isThreadAutoNaming}
+                              onToggleExpanded={handleToggleExpanded}
+                              onLoadOlderThreads={onLoadOlderThreads}
+                              onSelectThread={onSelectThread}
+                              onShowThreadMenu={showThreadMenu}
+                            />
+                          )}
+                          {!isSessionSectionCollapsed && showThreadLoader && (
+                            <ThreadLoading />
+                          )}
+                        </div>
                       )}
-                      {showThreadLoader && <ThreadLoading />}
                     </WorkspaceCard>
                   );
                 })}

@@ -139,6 +139,10 @@
   transform: none;
 }
 
+.sidebar-title-toggle-all {
+  margin-left: auto;
+}
+
 .workspace-icon {
   color: var(--text-muted);
   flex-shrink: 0;
@@ -667,6 +671,263 @@
   background: var(--surface-hover);
 }
 
+.worktree-section {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 6px 0 0;
+  padding: 6px 0 0;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+}
+
+.worktree-header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 20px;
+  margin: 0;
+  padding: 0 4px 0 4px;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  transition: background-color 0.16s ease, border-color 0.16s ease, color 0.16s ease;
+}
+
+.worktree-header:hover,
+.worktree-header:focus-visible {
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-quiet);
+}
+
+.worktree-header:focus-visible {
+  outline: 1px solid var(--border-subtle);
+  outline-offset: 1px;
+}
+
+.worktree-header-icon {
+  width: 11px;
+  height: 11px;
+  flex-shrink: 0;
+  opacity: 0.76;
+  stroke-width: 2px;
+}
+
+.worktree-header-text {
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.13em;
+  text-transform: lowercase;
+}
+
+.worktree-header-toggle {
+  margin-left: 2px;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-faint);
+  transform: rotate(90deg);
+  transition: transform 0.16s ease;
+}
+
+.worktree-header.collapsed .worktree-header-toggle {
+  transform: rotate(0deg);
+}
+
+.worktree-list {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin: 0;
+  padding-top: 2px;
+}
+
+.worktree-list.collapsed {
+  display: none;
+}
+
+.worktree-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  border-radius: 7px;
+  border: none;
+  background: transparent;
+  overflow: hidden;
+}
+
+.worktree-card + .worktree-card {
+  border-top: 1px solid var(--border-subtle);
+  padding-top: 3px;
+}
+
+.worktree-row {
+  display: flex;
+  align-items: center;
+  position: relative;
+  min-width: 0;
+  gap: 6px;
+  padding: 5px 8px 5px 10px;
+  border-radius: 7px;
+  color: var(--text-quiet);
+  cursor: pointer;
+  transition: background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+  -webkit-app-region: no-drag;
+  border: 1px solid transparent;
+  background: transparent;
+}
+
+.worktree-node-icon {
+  width: 11px;
+  height: 11px;
+  color: var(--text-faint);
+  opacity: 0.85;
+  flex-shrink: 0;
+  margin-left: 2px;
+}
+
+.worktree-row:hover {
+  background: rgba(255, 255, 255, 0.045);
+  border-color: rgba(255, 255, 255, 0.08);
+  color: var(--text-strong);
+}
+
+.worktree-row:hover .worktree-node-icon,
+.worktree-row.active .worktree-node-icon {
+  color: var(--text-muted);
+  opacity: 1;
+}
+
+.worktree-row.active {
+  background: rgba(83, 130, 201, 0.09);
+  border-color: rgba(83, 130, 201, 0.26);
+  color: var(--text-strong);
+}
+
+.worktree-row.deleting {
+  opacity: 0.72;
+  cursor: default;
+}
+
+.worktree-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 620;
+  line-height: 1.25;
+  letter-spacing: 0.01em;
+}
+
+.worktree-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.worktree-toggle {
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-faint);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.worktree-toggle:hover,
+.worktree-toggle:focus-visible {
+  color: var(--text-strong);
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-subtle);
+}
+
+.worktree-toggle-icon {
+  display: inline-block;
+  font-size: 12px;
+  line-height: 1;
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.worktree-toggle.expanded .worktree-toggle-icon {
+  transform: rotate(90deg);
+}
+
+.worktree-row .connect {
+  color: var(--text-faint);
+  font-size: 9.5px;
+  line-height: 1;
+  letter-spacing: 0.05em;
+  text-transform: lowercase;
+}
+
+.worktree-row .connect:hover {
+  color: var(--text-strong);
+}
+
+.worktree-deleting {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-faint);
+  padding-right: 1px;
+}
+
+.worktree-deleting-spinner {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-subtle);
+  border-top-color: var(--text-muted);
+  animation: sidebar-worktree-spin 0.8s linear infinite;
+}
+
+.worktree-deleting-label {
+  font-size: 9.5px;
+  letter-spacing: 0.01em;
+}
+
+.worktree-card .thread-list {
+  margin-top: 0;
+  padding: 2px 8px 7px 10px;
+}
+
+.worktree-card .thread-row {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 12px;
+}
+
+.worktree-card .thread-time {
+  font-size: 9.5px;
+  color: var(--text-faint);
+}
+
+.worktree-card .thread-name {
+  font-weight: 470;
+}
+
+@keyframes sidebar-worktree-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .thread-list {
   display: flex;
   flex-direction: column;
@@ -962,13 +1223,70 @@
   margin-bottom: 2px;
 }
 
+.workspace-session-section {
+  margin-top: 4px;
+  border-top: 1px solid var(--border-subtle);
+  border-radius: 0;
+  background: transparent;
+  overflow: hidden;
+}
+
+.sidebar-section-toggle {
+  width: 100%;
+  border: none;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  border-radius: 0;
+  margin-bottom: 0;
+  padding: 5px 8px;
+  transition: background-color 0.16s ease;
+}
+
+.sidebar-section-toggle:hover,
+.sidebar-section-toggle:focus-visible {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.sidebar-section-toggle:focus-visible {
+  outline: 1px solid var(--border-subtle);
+  outline-offset: -1px;
+}
+
 .sidebar-section-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 500;
   color: var(--text-faint);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   transition: color 0.15s ease;
 }
 
 .sidebar-section-title:hover {
   color: var(--text-strong);
+}
+
+.sidebar-section-title-icon {
+  font-size: 12px;
+  opacity: 0.75;
+}
+
+.sidebar-section-chevron {
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1;
+  transform: rotate(90deg);
+  transition: transform 0.16s ease;
+}
+
+.sidebar-section-toggle.collapsed .sidebar-section-chevron {
+  transform: rotate(0deg);
+}
+
+.workspace-session-section .thread-list {
+  padding: 3px 6px 8px;
+  margin: 0;
 }
