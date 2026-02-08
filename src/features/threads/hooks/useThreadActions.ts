@@ -414,10 +414,15 @@ export function useThreadActions({
   );
 
   const forkThreadForWorkspace = useCallback(
-    async (workspaceId: string, threadId: string) => {
+    async (
+      workspaceId: string,
+      threadId: string,
+      options?: { activate?: boolean },
+    ) => {
       if (!threadId) {
         return null;
       }
+      const shouldActivate = options?.activate !== false;
       onDebug?.({
         id: `${Date.now()}-client-thread-fork`,
         timestamp: Date.now(),
@@ -440,11 +445,13 @@ export function useThreadActions({
         }
         // Fork currently only works with Codex threads
         dispatch({ type: "ensureThread", workspaceId, threadId: forkedThreadId, engine: "codex" });
-        dispatch({
-          type: "setActiveThreadId",
-          workspaceId,
-          threadId: forkedThreadId,
-        });
+        if (shouldActivate) {
+          dispatch({
+            type: "setActiveThreadId",
+            workspaceId,
+            threadId: forkedThreadId,
+          });
+        }
         loadedThreadsRef.current[forkedThreadId] = false;
         await resumeThreadForWorkspace(workspaceId, forkedThreadId, true, true);
         return forkedThreadId;

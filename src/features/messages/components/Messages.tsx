@@ -343,7 +343,25 @@ const MessageRow = memo(function MessageRow({
 }: MessageRowProps) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
-  const hasText = item.text.trim().length > 0;
+  const displayText = useMemo(() => {
+    const originalText = item.text;
+    if (item.role !== "user") {
+      return originalText;
+    }
+    const userInputMatches = [...originalText.matchAll(/\[User Input\]\s*/g)];
+    if (userInputMatches.length === 0) {
+      return originalText;
+    }
+    const lastMatch = userInputMatches[userInputMatches.length - 1];
+    const markerIndex = lastMatch.index ?? -1;
+    if (markerIndex < 0) {
+      return originalText;
+    }
+    const markerLength = lastMatch[0]?.length ?? 0;
+    const extracted = originalText.slice(markerIndex + markerLength).trim();
+    return extracted.length > 0 ? extracted : originalText;
+  }, [item.role, item.text]);
+  const hasText = displayText.trim().length > 0;
   const imageItems = useMemo(() => {
     if (!item.images || item.images.length === 0) {
       return [];
@@ -371,7 +389,7 @@ const MessageRow = memo(function MessageRow({
         )}
         {hasText && (
           <Markdown
-            value={item.text}
+            value={displayText}
             className="markdown"
             codeBlockStyle="message"
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}

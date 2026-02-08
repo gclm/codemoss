@@ -1,5 +1,5 @@
 import { useTranslation } from "react-i18next";
-import { ArrowLeft, Search } from "lucide-react";
+import { ArrowLeft, Search, CornerUpLeft } from "lucide-react";
 import { useState, useRef, useEffect, useMemo } from "react";
 import type { AppMode, WorkspaceInfo } from "../../../types";
 import type { KanbanPanel } from "../types";
@@ -106,6 +106,15 @@ export function KanbanBoardHeader({
           aria-label={t("kanban.board.back")}
         >
           <ArrowLeft size={18} />
+        </button>
+        <button
+          type="button"
+          className="kanban-return-chat-link"
+          onClick={() => onAppModeChange("chat")}
+          aria-label={t("kanban.board.backToChat")}
+        >
+          <CornerUpLeft size={14} />
+          <span>{t("kanban.board.backToChat")}</span>
         </button>
         {showWsMenu ? (
           <div className="kanban-project-menu" ref={wsMenuRef}>

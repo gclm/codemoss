@@ -102,6 +102,32 @@ describe("Messages", () => {
     expect(markdown?.textContent ?? "").toContain("Literal [image] token");
   });
 
+  it("shows only user input for assembled prompt payload in user bubble", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "msg-assembled-1",
+        kind: "message",
+        role: "user",
+        text:
+          "[System] 你是 CodeMoss 内的 Claude Code Agent。 [Skill Prompt] # Skill: tr-zh-en-jp 技能说明... [Commons Prompt] 规范... [User Input] 你好啊",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    const markdown = container.querySelector(".markdown");
+    expect(markdown?.textContent ?? "").toBe("你好啊");
+  });
+
   it("uses reasoning title for the working indicator and hides title-only reasoning rows", () => {
     const items: ConversationItem[] = [
       {
@@ -216,8 +242,10 @@ describe("Messages", () => {
     );
 
     const workingText = container.querySelector(".working-text");
-    expect(workingText?.textContent ?? "").toContain("Working");
-    expect(workingText?.textContent ?? "").not.toContain("Old reasoning title");
+    const label = workingText?.textContent ?? "";
+    expect(label).toBeTruthy();
+    expect(label).not.toContain("Old reasoning title");
+    expect(label).toMatch(/Working|Generating response|messages\.generatingResponse/);
   });
 
   it("keeps the latest title-only reasoning label without rendering a reasoning row", () => {
@@ -464,7 +492,7 @@ describe("Messages", () => {
     expect(screen.getByText("A message between explore blocks")).toBeTruthy();
   });
 
-  it("counts explore entry steps in the tool group summary", async () => {
+  it("keeps explore entry steps separate from tool-group summary", async () => {
     const items: ConversationItem[] = [
       {
         id: "tool-1",
@@ -501,7 +529,7 @@ describe("Messages", () => {
       },
     ];
 
-    render(
+    const { container } = render(
       <Messages
         items={items}
         threadId="thread-1"
@@ -513,7 +541,9 @@ describe("Messages", () => {
     );
 
     await waitFor(() => {
-      expect(screen.getByText("5 tool calls")).toBeTruthy();
+      const exploreRows = container.querySelectorAll(".explore-inline-item");
+      expect(exploreRows.length).toBe(3);
     });
+    expect(screen.queryByText("5 tool calls")).toBeNull();
   });
 });

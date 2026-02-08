@@ -32,8 +32,18 @@ import { ComposerQueue } from "./ComposerQueue";
 import { StatusPanel } from "../../status-panel/components/StatusPanel";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Check from "lucide-react/dist/esm/icons/check";
+import CircleHelp from "lucide-react/dist/esm/icons/circle-help";
+import Hammer from "lucide-react/dist/esm/icons/hammer";
+import Wrench from "lucide-react/dist/esm/icons/wrench";
+import ClipboardList from "lucide-react/dist/esm/icons/clipboard-list";
+import {
+  assembleSinglePrompt,
+  shouldAssemblePrompt,
+} from "../utils/promptAssembler";
 
 type ComposerProps = {
+  kanbanContextMode?: "new" | "inherit";
+  onKanbanContextModeChange?: (mode: "new" | "inherit") => void;
   items?: ConversationItem[];
   onSend: (text: string, images: string[]) => void;
   onQueue: (text: string, images: string[]) => void;
@@ -139,7 +149,207 @@ const DEFAULT_EDITOR_SETTINGS: ComposerEditorSettings = {
 
 const EMPTY_ITEMS: ConversationItem[] = [];
 
+type PrefixOption = {
+  name: string;
+  description?: string;
+};
+
+type PrefixGroup = {
+  prefix: string;
+  options: PrefixOption[];
+};
+
+function extractOptionPrefix(name: string) {
+  const trimmed = name.trim();
+  if (!trimmed) {
+    return "Other";
+  }
+  if (trimmed.includes(":")) {
+    return trimmed.split(":")[0] || "Other";
+  }
+  if (trimmed.includes("-")) {
+    return trimmed.split("-")[0] || "Other";
+  }
+  return "Other";
+}
+
+function groupOptionsByPrefix(options: PrefixOption[]): PrefixGroup[] {
+  const grouped = new Map<string, PrefixOption[]>();
+  for (const option of options) {
+    const prefix = extractOptionPrefix(option.name);
+    const bucket = grouped.get(prefix) ?? [];
+    bucket.push(option);
+    grouped.set(prefix, bucket);
+  }
+  return Array.from(grouped.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .map(([prefix, list]) => ({
+      prefix,
+      options: list.sort((a, b) => a.name.localeCompare(b.name)),
+    }));
+}
+
+function splitGroupsForColumns(groups: PrefixGroup[]): [PrefixGroup[], PrefixGroup[]] {
+  const left: PrefixGroup[] = [];
+  const right: PrefixGroup[] = [];
+  let leftWeight = 0;
+  let rightWeight = 0;
+  for (const group of groups) {
+    const groupWeight = group.options.length + 1;
+    if (leftWeight <= rightWeight) {
+      left.push(group);
+      leftWeight += groupWeight;
+    } else {
+      right.push(group);
+      rightWeight += groupWeight;
+    }
+  }
+  return [left, right];
+}
+
+function normalizeSlashToken(value: string) {
+  return value.trim().replace(/^\/+/, "").replace(/\s+/g, "-").toLowerCase();
+}
+
+function toAliasCandidates(name: string) {
+  const raw = name.trim().replace(/^\/+/, "");
+  if (!raw) {
+    return [];
+  }
+  const collapsedSpace = raw.replace(/\s+/g, " ");
+  return Array.from(
+    new Set([
+      raw,
+      raw.replace(/\s+/g, "-"),
+      raw.replace(/\s+/g, "_"),
+      collapsedSpace,
+      collapsedSpace.replace(/\s+/g, "-"),
+      collapsedSpace.replace(/\s+/g, "_"),
+    ]),
+  );
+}
+
+function buildSlashAliasMap(options: { name: string }[]) {
+  const aliasMap = new Map<string, string>();
+  for (const option of options) {
+    for (const alias of toAliasCandidates(option.name)) {
+      aliasMap.set(normalizeSlashToken(alias), option.name);
+    }
+  }
+  return aliasMap;
+}
+
+function getMaxAliasWordCount(aliasMap: Map<string, string>) {
+  let maxCount = 1;
+  for (const alias of aliasMap.keys()) {
+    const count = alias.split("-").filter(Boolean).length;
+    if (count > maxCount) {
+      maxCount = count;
+    }
+  }
+  return maxCount;
+}
+
+function mergeUniqueNames(previous: string[], incoming: string[]) {
+  if (incoming.length === 0) {
+    return previous;
+  }
+  const seen = new Set(previous);
+  const merged = [...previous];
+  for (const name of incoming) {
+    if (seen.has(name)) {
+      continue;
+    }
+    seen.add(name);
+    merged.push(name);
+  }
+  return merged;
+}
+
+function extractInlineSelections(
+  text: string,
+  skills: { name: string }[],
+  commons: { name: string }[],
+) {
+  const tokenMatches = text.match(/\/[^\s]+/g) ?? [];
+  if (tokenMatches.length === 0) {
+    return { cleanedText: text, matchedSkillNames: [] as string[], matchedCommonsNames: [] as string[] };
+  }
+  const skillMap = buildSlashAliasMap(skills);
+  const commonsMap = buildSlashAliasMap(commons);
+  const maxWordCount = Math.max(getMaxAliasWordCount(skillMap), getMaxAliasWordCount(commonsMap));
+  const matchedSkillNames: string[] = [];
+  const matchedCommonsNames: string[] = [];
+  const words = text.split(/\s+/).filter(Boolean);
+  if (words.length === 0) {
+    return { cleanedText: text, matchedSkillNames, matchedCommonsNames };
+  }
+  const consumedWordIndexes = new Set<number>();
+
+  for (let index = 0; index < words.length; index += 1) {
+    if (consumedWordIndexes.has(index)) {
+      continue;
+    }
+    if (!words[index]?.startsWith("/")) {
+      continue;
+    }
+    let matched = false;
+    for (let wordCount = maxWordCount; wordCount >= 1; wordCount -= 1) {
+      const endIndex = index + wordCount;
+      if (endIndex > words.length) {
+        continue;
+      }
+      const candidate = words.slice(index, endIndex).join(" ");
+      const normalized = normalizeSlashToken(candidate);
+      const skillName = skillMap.get(normalized);
+      if (skillName) {
+        matchedSkillNames.push(skillName);
+        for (let i = index; i < endIndex; i += 1) {
+          consumedWordIndexes.add(i);
+        }
+        matched = true;
+        break;
+      }
+      const commonsName = commonsMap.get(normalized);
+      if (commonsName) {
+        matchedCommonsNames.push(commonsName);
+        for (let i = index; i < endIndex; i += 1) {
+          consumedWordIndexes.add(i);
+        }
+        matched = true;
+        break;
+      }
+    }
+    if (!matched) {
+      continue;
+    }
+  }
+  if (consumedWordIndexes.size === 0) {
+    return { cleanedText: text, matchedSkillNames, matchedCommonsNames };
+  }
+  const cleanedText = words
+    .filter((_, index) => !consumedWordIndexes.has(index))
+    .join(" ");
+  return { cleanedText, matchedSkillNames, matchedCommonsNames };
+}
+
+function filterOptionsByQuery<T extends { name: string; description?: string }>(
+  options: T[],
+  query: string,
+): T[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+  if (!normalizedQuery) {
+    return options;
+  }
+  return options.filter((option) => {
+    const searchableText = `${option.name} ${option.description ?? ""}`.toLocaleLowerCase();
+    return searchableText.includes(normalizedQuery);
+  });
+}
+
 export function Composer({
+  kanbanContextMode = "new",
+  onKanbanContextModeChange,
   items = EMPTY_ITEMS,
   onSend,
   onQueue,
@@ -226,6 +436,14 @@ export function Composer({
   const { t } = useTranslation();
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
+  const [contextCollapsed, setContextCollapsed] = useState(true);
+  const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
+  const [selectedCommonsNames, setSelectedCommonsNames] = useState<string[]>([]);
+  const [helpMenuOpen, setHelpMenuOpen] = useState(false);
+  const [skillMenuOpen, setSkillMenuOpen] = useState(false);
+  const [commonsMenuOpen, setCommonsMenuOpen] = useState(false);
+  const [skillSearchQuery, setSkillSearchQuery] = useState("");
+  const [commonsSearchQuery, setCommonsSearchQuery] = useState("");
   const internalRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaRef = externalTextareaRef ?? internalRef;
   const editorSettings = editorSettingsProp ?? DEFAULT_EDITOR_SETTINGS;
@@ -243,10 +461,52 @@ export function Composer({
 
   // Get current engine display name
   const currentEngineName = engines?.find((e) => e.type === selectedEngine)?.shortName;
+  const selectedSkills = skills.filter((skill) => selectedSkillNames.includes(skill.name));
+  const selectedCommons = commands.filter((item) =>
+    selectedCommonsNames.includes(item.name),
+  );
+  const collapsedSkillPreview = selectedSkills.slice(0, 2);
+  const collapsedCommonsPreview = selectedCommons.slice(0, 2);
+  const collapsedKanbanPreview = (() => {
+    if (linkedKanbanPanels.length <= 2) {
+      return linkedKanbanPanels;
+    }
+    const base = linkedKanbanPanels.slice(0, 2);
+    if (!selectedLinkedKanbanPanelId) {
+      return base;
+    }
+    if (base.some((panel) => panel.id === selectedLinkedKanbanPanelId)) {
+      return base;
+    }
+    const selected = linkedKanbanPanels.find(
+      (panel) => panel.id === selectedLinkedKanbanPanelId,
+    );
+    return selected ? [base[0], selected] : base;
+  })();
+  const availableSkills = skills.filter((skill) => !selectedSkillNames.includes(skill.name));
+  const availableCommons = commands.filter((item) => !selectedCommonsNames.includes(item.name));
+  const skillOptions = availableSkills.map((skill) => ({
+    name: skill.name,
+    description: skill.description,
+  }));
+  const commonsOptions = availableCommons.map((item) => ({
+    name: item.name,
+    description: item.description,
+  }));
+  const filteredSkillOptions = filterOptionsByQuery(skillOptions, skillSearchQuery);
+  const filteredCommonsOptions = filterOptionsByQuery(commonsOptions, commonsSearchQuery);
+  const groupedSkillOptions = groupOptionsByPrefix(filteredSkillOptions);
+  const groupedCommonsOptions = groupOptionsByPrefix(filteredCommonsOptions);
+  const [skillLeftColumn, skillRightColumn] = splitGroupsForColumns(groupedSkillOptions);
+  const [commonsLeftColumn, commonsRightColumn] = splitGroupsForColumns(groupedCommonsOptions);
 
   useEffect(() => {
     setText((prev) => (prev === draftText ? prev : draftText));
   }, [draftText]);
+
+  useEffect(() => {
+    setContextCollapsed(true);
+  }, [historyKey]);
 
   const setComposerText = useCallback(
     (next: string) => {
@@ -255,6 +515,20 @@ export function Composer({
     },
     [onDraftChange],
   );
+
+  useEffect(() => {
+    const { cleanedText, matchedSkillNames, matchedCommonsNames } =
+      extractInlineSelections(text, skills, commands);
+    if (matchedSkillNames.length > 0) {
+      setSelectedSkillNames((prev) => mergeUniqueNames(prev, matchedSkillNames));
+    }
+    if (matchedCommonsNames.length > 0) {
+      setSelectedCommonsNames((prev) => mergeUniqueNames(prev, matchedCommonsNames));
+    }
+    if (cleanedText !== text) {
+      setComposerText(cleanedText);
+    }
+  }, [commands, setComposerText, skills, text]);
 
   const {
     isAutocompleteOpen,
@@ -317,12 +591,25 @@ export function Composer({
     if (trimmed) {
       recordHistory(trimmed);
     }
-    onSend(trimmed, attachedImages);
+    const finalText = shouldAssemblePrompt({
+      userInput: trimmed,
+      selectedSkillCount: selectedSkills.length,
+      selectedCommonsCount: selectedCommons.length,
+    })
+      ? assembleSinglePrompt({
+          userInput: trimmed,
+          skills: selectedSkills,
+          commons: selectedCommons.map((item) => ({ name: item.name })),
+        })
+      : trimmed;
+    onSend(finalText, attachedImages);
     resetHistoryNavigation();
     setComposerText("");
   }, [
     attachedImages,
     disabled,
+    selectedCommons,
+    selectedSkills,
     onSend,
     recordHistory,
     resetHistoryNavigation,
@@ -341,12 +628,25 @@ export function Composer({
     if (trimmed) {
       recordHistory(trimmed);
     }
-    onQueue(trimmed, attachedImages);
+    const finalText = shouldAssemblePrompt({
+      userInput: trimmed,
+      selectedSkillCount: selectedSkills.length,
+      selectedCommonsCount: selectedCommons.length,
+    })
+      ? assembleSinglePrompt({
+          userInput: trimmed,
+          skills: selectedSkills,
+          commons: selectedCommons.map((item) => ({ name: item.name })),
+        })
+      : trimmed;
+    onQueue(finalText, attachedImages);
     resetHistoryNavigation();
     setComposerText("");
   }, [
     attachedImages,
     disabled,
+    selectedCommons,
+    selectedSkills,
     onQueue,
     recordHistory,
     resetHistoryNavigation,
@@ -380,6 +680,69 @@ export function Composer({
 
   const selectedLinkedPanel = linkedKanbanPanels.find(
     (panel) => panel.id === selectedLinkedKanbanPanelId,
+  );
+
+  const handlePickSkill = useCallback((name: string) => {
+    setSelectedSkillNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setSkillSearchQuery("");
+    setSkillMenuOpen(false);
+  }, []);
+
+  const handlePickCommons = useCallback((name: string) => {
+    setSelectedCommonsNames((prev) => (prev.includes(name) ? prev : [...prev, name]));
+    setCommonsSearchQuery("");
+    setCommonsMenuOpen(false);
+  }, []);
+
+  const renderGroupedOptions = useCallback(
+    (
+      leftColumn: PrefixGroup[],
+      rightColumn: PrefixGroup[],
+      onPick: (name: string) => void,
+      emptyLabel: string,
+      keyPrefix: string,
+    ) => {
+      const renderColumn = (groups: PrefixGroup[], columnKey: "left" | "right") => (
+        <div className="composer-context-menu-column" key={`${keyPrefix}-${columnKey}`}>
+          {groups.map((group) => (
+            <section
+              key={`${keyPrefix}-${columnKey}-${group.prefix}`}
+              className="composer-context-menu-group"
+            >
+              <header className="composer-context-menu-group-title">{group.prefix}</header>
+              <div className="composer-context-menu-group-items">
+                {group.options.map((option) => (
+                  <button
+                    key={`${keyPrefix}-${columnKey}-${group.prefix}-${option.name}`}
+                    type="button"
+                    className="composer-context-menu-item"
+                    onClick={() => onPick(option.name)}
+                    title={option.description}
+                  >
+                    <span className="composer-context-menu-item-name">{option.name}</span>
+                    <span className="composer-context-menu-item-desc">
+                      {option.description || "暂无描述"}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </section>
+          ))}
+        </div>
+      );
+
+      if (leftColumn.length === 0 && rightColumn.length === 0) {
+        return <span className="composer-context-menu-empty">{emptyLabel}</span>;
+      }
+
+      return (
+        <>
+          {renderColumn(leftColumn, "left")}
+          {renderColumn(rightColumn, "right")}
+        </>
+      );
+    },
+    [],
   );
 
   useEffect(() => {
@@ -553,7 +916,6 @@ export function Composer({
     [applyTextInsertion, fenceLanguageTags, fenceWrapSelection, text],
   );
 
-
   return (
     <footer className={`composer${disabled ? " is-disabled" : ""}`}>
       <StatusPanel items={items} isProcessing={isProcessing} />
@@ -562,221 +924,602 @@ export function Composer({
         onEditQueued={onEditQueued}
         onDeleteQueued={onDeleteQueued}
       />
-      <div className="composer-kanban-toolbar composer-kanban-toolbar--outside">
-        <span className="composer-kanban-strip-title">
-          {t("kanban.composer.relatedPanels")}
-        </span>
-        {linkedKanbanPanels.length > 0 ? (
-          <div className="composer-kanban-strip" role="tablist" aria-label={t("kanban.composer.relatedPanels")}>
-            {linkedKanbanPanels.map((panel) => {
-              const isActive = selectedLinkedKanbanPanelId === panel.id;
-              return (
-                <div
-                  key={panel.id}
-                  className={`composer-kanban-strip-item${isActive ? " is-active" : ""}`}
+      <div className="composer-shell">
+        <div className="composer-management-panel">
+          <div className="composer-management-header">
+            <div className="composer-context-actions">
+              <div className="composer-context-menu">
+                <button
+                  type="button"
+                  className="composer-context-action-btn composer-context-action-btn--help"
+                  onClick={() => {
+                    setHelpMenuOpen((prev) => !prev);
+                    setSkillMenuOpen(false);
+                    setCommonsMenuOpen(false);
+                  }}
+                  disabled={disabled}
+                  aria-label="管理面板使用说明"
                 >
-                  <button
-                    type="button"
-                    className="composer-kanban-strip-main"
-                    onClick={() => handleSelectLinkedPanel(panel.id)}
+                  <span className="composer-context-action-icon" aria-hidden>
+                    <CircleHelp size={12} />
+                  </span>
+                </button>
+                {helpMenuOpen && (
+                  <div
+                    className="composer-context-menu-panel composer-context-menu-panel--help"
+                    role="dialog"
+                    aria-label="管理面板说明"
                   >
-                    {isActive && <Check size={12} />}
-                    <span>{panel.name}</span>
-                  </button>
-                  <button
-                    type="button"
-                    className="composer-kanban-strip-link"
-                    onClick={() => onOpenLinkedKanbanPanel?.(panel.id)}
+                    <div className="composer-context-menu-head">
+                      <span className="composer-context-menu-title">管理面板使用说明</span>
+                      <span className="composer-context-menu-meta">面向 Skill / Commons / 看板联动</span>
+                    </div>
+                    <div className="composer-context-help-grid">
+                      <section className="composer-context-help-section">
+                        <h4>按钮含义</h4>
+                        <ul>
+                          <li>
+                            <strong>+S</strong>：添加 Skill（专家视角），如 Review / Debug / Doc。
+                          </li>
+                          <li>
+                            <strong>+M</strong>：添加 Commons（长期规则），如项目约束、团队规范。
+                          </li>
+                          <li>
+                            <strong>S / M / K</strong>：已选 Skill / Commons / 关联看板标识。
+                          </li>
+                          <li>
+                            <strong>K link</strong>：打开对应看板页面；切换不同 K 即切换上下文来源。
+                          </li>
+                        </ul>
+                      </section>
+                      <section className="composer-context-help-section">
+                        <h4>推荐用法</h4>
+                        <ol>
+                          <li>先选 1-2 个 Skill，确定分析角度。</li>
+                          <li>再补 1-2 个 Commons，限制输出边界。</li>
+                          <li>需要结合项目状态时，再选择关联看板 (K)。</li>
+                        </ol>
+                      </section>
+                      <section className="composer-context-help-section">
+                        <h4>看板与会话模式</h4>
+                        <ul>
+                          <li>
+                            <strong>K 选中效果</strong>：被选中的看板会作为当前上下文来源，发送时优先绑定该看板。
+                          </li>
+                          <li>
+                            <strong>新会话</strong>：仅使用当前输入 + 已选 S/M/K，不继承上一次该看板会话内容。
+                          </li>
+                          <li>
+                            <strong>继承当前</strong>：继续该看板的当前会话，保留已有上下文与历史推理链路。
+                          </li>
+                          <li>
+                            <strong>选中态 icon</strong>：当前生效模式前会显示绿色勾选 icon，便于快速确认。
+                          </li>
+                        </ul>
+                      </section>
+                      <section className="composer-context-help-section composer-context-help-section--wide">
+                        <h4>发送时自动拼装（对用户透明）</h4>
+                        <pre className="composer-context-help-example">
+{`/skill-name /commons-name 你的自然语言问题
+示例：/tr-zh-en-jp /AI-REACH:Auto 我要睡觉`}
+                        </pre>
+                      </section>
+                    </div>
+                    <div className="composer-context-menu-foot">
+                      目标：你只写问题，系统负责结构化 Prompt 组装。
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="composer-context-menu">
+                <button
+                  type="button"
+                  className="composer-context-action-btn composer-context-action-btn--skill"
+                  onClick={() => {
+                    setSkillMenuOpen((prev) => !prev);
+                    setHelpMenuOpen(false);
+                    setCommonsMenuOpen(false);
+                    setCommonsSearchQuery("");
+                  }}
+                  disabled={disabled}
+                >
+                  <span className="composer-context-action-icon" aria-hidden>
+                    <Hammer size={12} />
+                  </span>
+                  <span>S+</span>
+                </button>
+                {skillMenuOpen && (
+                  <div
+                    className={`composer-context-menu-panel${
+                      skillSearchQuery.trim() ? " is-searching" : ""
+                    }`}
                   >
-                    <ExternalLink size={12} />
-                    <span>{t("kanban.composer.link")}</span>
-                  </button>
+                    <div className="composer-context-menu-sticky">
+                      <div className="composer-context-menu-head">
+                        <span className="composer-context-menu-title">选择 Skill</span>
+                        <span className="composer-context-menu-meta">
+                          {filteredSkillOptions.length} 个可选
+                        </span>
+                      </div>
+                      <div className="composer-context-menu-search">
+                        <input
+                          type="text"
+                          className="composer-context-menu-search-input"
+                          value={skillSearchQuery}
+                          onChange={(event) => setSkillSearchQuery(event.target.value)}
+                          placeholder="搜索 Skill（名称或描述）"
+                          aria-label="搜索 Skill"
+                        />
+                      </div>
+                    </div>
+                    <div
+                      className="composer-context-menu-grid"
+                      role="listbox"
+                      aria-label="Skill options"
+                    >
+                      {renderGroupedOptions(
+                        skillLeftColumn,
+                        skillRightColumn,
+                        handlePickSkill,
+                        "没有可选 Skill",
+                        "skill",
+                      )}
+                    </div>
+                    <div className="composer-context-menu-foot">点击一项立即添加</div>
+                  </div>
+                )}
+              </div>
+
+              <div className="composer-context-menu">
+                <button
+                  type="button"
+                  className="composer-context-action-btn composer-context-action-btn--commons"
+                  onClick={() => {
+                    setCommonsMenuOpen((prev) => !prev);
+                    setHelpMenuOpen(false);
+                    setSkillMenuOpen(false);
+                    setSkillSearchQuery("");
+                  }}
+                  disabled={disabled}
+                >
+                  <span className="composer-context-action-icon" aria-hidden>
+                    <Wrench size={12} />
+                  </span>
+                  <span>M+</span>
+                </button>
+                {commonsMenuOpen && (
+                  <div
+                    className={`composer-context-menu-panel${
+                      commonsSearchQuery.trim() ? " is-searching" : ""
+                    }`}
+                  >
+                    <div className="composer-context-menu-sticky">
+                      <div className="composer-context-menu-head">
+                        <span className="composer-context-menu-title">选择 Commons</span>
+                        <span className="composer-context-menu-meta">
+                          {filteredCommonsOptions.length} 个可选
+                        </span>
+                      </div>
+                      <div className="composer-context-menu-search">
+                        <input
+                          type="text"
+                          className="composer-context-menu-search-input"
+                          value={commonsSearchQuery}
+                          onChange={(event) => setCommonsSearchQuery(event.target.value)}
+                          placeholder="搜索 Commons（名称或描述）"
+                          aria-label="搜索 Commons"
+                        />
+                      </div>
+                    </div>
+                    <div
+                      className="composer-context-menu-grid"
+                      role="listbox"
+                      aria-label="Commons options"
+                    >
+                      {renderGroupedOptions(
+                        commonsLeftColumn,
+                        commonsRightColumn,
+                        handlePickCommons,
+                        "没有可选 Commons",
+                        "commons",
+                      )}
+                    </div>
+                    <div className="composer-context-menu-foot">点击一项立即添加</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {(selectedSkills.length > 0 ||
+              selectedCommons.length > 0 ||
+              (contextCollapsed && collapsedKanbanPreview.length > 0)) && (
+                <div
+                  className={`composer-management-collapsed-row${
+                    contextCollapsed ? " is-collapsed" : " is-expanded"
+                  }`}
+                >
+                  {(contextCollapsed ? collapsedSkillPreview : selectedSkills).map((skill) => (
+                    <button
+                      key={`collapsed-skill-${skill.name}`}
+                      type="button"
+                      className="composer-collapsed-pill composer-collapsed-pill--skill"
+                      onClick={() =>
+                        setSelectedSkillNames((prev) =>
+                          prev.filter((name) => name !== skill.name),
+                        )
+                      }
+                      title={skill.description}
+                    >
+                      <span className="composer-collapsed-pill-kind" aria-hidden>
+                        <Hammer size={10} />
+                      </span>
+                      <span>{skill.name}</span>
+                      <span aria-hidden>×</span>
+                    </button>
+                  ))}
+                  {(contextCollapsed ? collapsedCommonsPreview : selectedCommons).map((item) => (
+                    <button
+                      key={`collapsed-commons-${item.name}`}
+                      type="button"
+                      className="composer-collapsed-pill composer-collapsed-pill--commons"
+                      onClick={() =>
+                        setSelectedCommonsNames((prev) =>
+                          prev.filter((name) => name !== item.name),
+                        )
+                      }
+                      title={item.description}
+                    >
+                      <span className="composer-collapsed-pill-kind" aria-hidden>
+                        <Wrench size={10} />
+                      </span>
+                      <span>{item.name}</span>
+                      <span aria-hidden>×</span>
+                    </button>
+                  ))}
+                  {contextCollapsed && collapsedKanbanPreview.length > 0 && (
+                    <div
+                      className="composer-kanban-strip composer-kanban-strip--compact"
+                      role="tablist"
+                      aria-label={t("kanban.composer.relatedPanels")}
+                    >
+                      {collapsedKanbanPreview.map((panel) => {
+                        const isActive = selectedLinkedKanbanPanelId === panel.id;
+                        return (
+                          <div
+                            key={`collapsed-panel-${panel.id}`}
+                            className={`composer-kanban-strip-item${isActive ? " is-active" : ""}`}
+                          >
+                            <button
+                              type="button"
+                              className="composer-kanban-strip-main"
+                              onClick={() => handleSelectLinkedPanel(panel.id)}
+                            >
+                              <span className="composer-kanban-strip-kind" aria-hidden>
+                                <ClipboardList size={10} />
+                              </span>
+                              <span>{panel.name}</span>
+                            </button>
+                            <button
+                              type="button"
+                              className="composer-kanban-strip-link"
+                              onClick={() => onOpenLinkedKanbanPanel?.(panel.id)}
+                            >
+                              <ExternalLink size={12} />
+                              <span>{t("kanban.composer.link")}</span>
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  {contextCollapsed && selectedLinkedPanel ? (
+                    <div
+                      className="composer-kanban-context-mode composer-kanban-context-mode--compact"
+                      role="group"
+                      aria-label={t("kanban.composer.contextModeLabel")}
+                    >
+                      <button
+                        type="button"
+                        className={`composer-kanban-context-mode-btn${
+                          kanbanContextMode === "new" ? " is-active" : ""
+                        }`}
+                        onClick={() => onKanbanContextModeChange?.("new")}
+                      >
+                        {kanbanContextMode === "new" ? (
+                          <span className="composer-kanban-context-mode-check" aria-hidden>
+                            <Check size={10} />
+                          </span>
+                        ) : null}
+                        {t("kanban.composer.contextModeNew")}
+                      </button>
+                      <button
+                        type="button"
+                        className={`composer-kanban-context-mode-btn${
+                          kanbanContextMode === "inherit" ? " is-active" : ""
+                        }`}
+                        onClick={() => onKanbanContextModeChange?.("inherit")}
+                      >
+                        {kanbanContextMode === "inherit" ? (
+                          <span className="composer-kanban-context-mode-check" aria-hidden>
+                            <Check size={10} />
+                          </span>
+                        ) : null}
+                        {t("kanban.composer.contextModeInherit")}
+                      </button>
+                    </div>
+                  ) : null}
                 </div>
-              );
-            })}
-            {selectedLinkedPanel && (
-              <button
-                type="button"
-                className="composer-kanban-strip-clear"
-                onClick={() => handleSelectLinkedPanel(selectedLinkedPanel.id)}
-              >
-                {t("kanban.composer.clear")}
-              </button>
-            )}
+              )}
+            <button
+              type="button"
+              className="composer-management-toggle"
+              onClick={() => setContextCollapsed((prev) => !prev)}
+            >
+              {contextCollapsed ? "▶" : "▼"} 管理面板
+            </button>
           </div>
-        ) : (
-          <span className="composer-kanban-strip-empty">{t("kanban.composer.empty")}</span>
-        )}
-      </div>
-      <ComposerInput
-        text={text}
-        disabled={disabled}
-        sendLabel={sendLabel}
-        canStop={canStop}
-        canSend={canSend}
-        isProcessing={isProcessing}
-        onStop={onStop}
-        onSend={handleSend}
-        engineName={currentEngineName}
-        dictationEnabled={dictationEnabled}
-        dictationState={dictationState}
-        dictationLevel={dictationLevel}
-        onToggleDictation={onToggleDictation}
-        onOpenDictationSettings={onOpenDictationSettings}
-        dictationError={dictationError}
-        onDismissDictationError={onDismissDictationError}
-        dictationHint={dictationHint}
-        onDismissDictationHint={onDismissDictationHint}
-        attachments={attachedImages}
-        onAddAttachment={onPickImages}
-        onAttachImages={onAttachImages}
-        onRemoveAttachment={onRemoveImage}
-        onTextChange={handleTextChangeWithHistory}
-        onSelectionChange={handleSelectionChange}
-        onTextPaste={handleTextPaste}
-        textareaHeight={textareaHeight}
-        onHeightChange={onTextareaHeightChange}
-        onKeyDown={(event) => {
-          if (isComposingEvent(event)) {
-            return;
-          }
-          handleHistoryKeyDown(event);
-          if (event.defaultPrevented) {
-            return;
-          }
-          if (
-            expandFenceOnSpace &&
-            event.key === " " &&
-            !event.shiftKey &&
-            !event.metaKey &&
-            !event.ctrlKey &&
-            !event.altKey
-          ) {
-            const textarea = textareaRef.current;
-            if (!textarea) {
+
+          {!contextCollapsed && (
+            <div className="composer-management-body">
+              <div className="composer-management-divider" />
+              <div className="composer-kanban-toolbar">
+                <span className="composer-kanban-strip-title">
+                  {t("kanban.composer.relatedPanels")}
+                </span>
+                {linkedKanbanPanels.length > 0 ? (
+                  <div className="composer-kanban-strip" role="tablist" aria-label={t("kanban.composer.relatedPanels")}>
+                    {linkedKanbanPanels.map((panel) => {
+                      const isActive = selectedLinkedKanbanPanelId === panel.id;
+                      return (
+                        <div
+                          key={panel.id}
+                          className={`composer-kanban-strip-item${isActive ? " is-active" : ""}`}
+                        >
+                          <button
+                            type="button"
+                            className="composer-kanban-strip-main"
+                            onClick={() => handleSelectLinkedPanel(panel.id)}
+                          >
+                            <span className="composer-kanban-strip-kind" aria-hidden>
+                              <ClipboardList size={10} />
+                            </span>
+                            <span>{panel.name}</span>
+                          </button>
+                          <button
+                            type="button"
+                            className="composer-kanban-strip-link"
+                            onClick={() => onOpenLinkedKanbanPanel?.(panel.id)}
+                          >
+                            <ExternalLink size={12} />
+                            <span>{t("kanban.composer.link")}</span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {selectedLinkedPanel && (
+                      <button
+                        type="button"
+                        className="composer-kanban-strip-clear"
+                        onClick={() => handleSelectLinkedPanel(selectedLinkedPanel.id)}
+                      >
+                        {t("kanban.composer.clear")}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="composer-kanban-strip-empty">{t("kanban.composer.empty")}</span>
+                )}
+                {selectedLinkedPanel ? (
+                  <div className="composer-kanban-context-mode" role="group" aria-label={t("kanban.composer.contextModeLabel")}>
+                    <span className="composer-kanban-context-mode-label">
+                      {t("kanban.composer.contextModeLabel")}
+                    </span>
+                    <button
+                      type="button"
+                      className={`composer-kanban-context-mode-btn${
+                        kanbanContextMode === "new" ? " is-active" : ""
+                      }`}
+                      onClick={() => onKanbanContextModeChange?.("new")}
+                    >
+                      {kanbanContextMode === "new" ? (
+                        <span className="composer-kanban-context-mode-check" aria-hidden>
+                          <Check size={10} />
+                        </span>
+                      ) : null}
+                      {t("kanban.composer.contextModeNew")}
+                    </button>
+                    <button
+                      type="button"
+                      className={`composer-kanban-context-mode-btn${
+                        kanbanContextMode === "inherit" ? " is-active" : ""
+                      }`}
+                      onClick={() => onKanbanContextModeChange?.("inherit")}
+                    >
+                      {kanbanContextMode === "inherit" ? (
+                        <span className="composer-kanban-context-mode-check" aria-hidden>
+                          <Check size={10} />
+                        </span>
+                      ) : null}
+                      {t("kanban.composer.contextModeInherit")}
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <ComposerInput
+          text={text}
+          disabled={disabled}
+          sendLabel={sendLabel}
+          canStop={canStop}
+          canSend={canSend}
+          isProcessing={isProcessing}
+          onStop={onStop}
+          onSend={handleSend}
+          engineName={currentEngineName}
+          dictationEnabled={dictationEnabled}
+          dictationState={dictationState}
+          dictationLevel={dictationLevel}
+          onToggleDictation={onToggleDictation}
+          onOpenDictationSettings={onOpenDictationSettings}
+          dictationError={dictationError}
+          onDismissDictationError={onDismissDictationError}
+          dictationHint={dictationHint}
+          onDismissDictationHint={onDismissDictationHint}
+          attachments={attachedImages}
+          onAddAttachment={onPickImages}
+          onAttachImages={onAttachImages}
+          onRemoveAttachment={onRemoveImage}
+          onTextChange={handleTextChangeWithHistory}
+          onSelectionChange={handleSelectionChange}
+          onTextPaste={handleTextPaste}
+          textareaHeight={textareaHeight}
+          onHeightChange={onTextareaHeightChange}
+          onKeyDown={(event) => {
+            if (isComposingEvent(event)) {
               return;
             }
-            const start = textarea.selectionStart ?? text.length;
-            const end = textarea.selectionEnd ?? start;
-            if (tryExpandFence(start, end)) {
-              event.preventDefault();
+            handleHistoryKeyDown(event);
+            if (event.defaultPrevented) {
               return;
             }
-          }
-          if (event.key === "Enter" && event.shiftKey) {
-            if (continueListOnShiftEnter && !suggestionsOpen) {
+            if (
+              expandFenceOnSpace &&
+              event.key === " " &&
+              !event.shiftKey &&
+              !event.metaKey &&
+              !event.ctrlKey &&
+              !event.altKey
+            ) {
               const textarea = textareaRef.current;
-              if (textarea) {
-                const start = textarea.selectionStart ?? text.length;
-                const end = textarea.selectionEnd ?? start;
-                if (start === end) {
-                  const marker = getListContinuation(text, start);
-                  if (marker) {
+              if (!textarea) {
+                return;
+              }
+              const start = textarea.selectionStart ?? text.length;
+              const end = textarea.selectionEnd ?? start;
+              if (tryExpandFence(start, end)) {
+                event.preventDefault();
+                return;
+              }
+            }
+            if (event.key === "Enter" && event.shiftKey) {
+              if (continueListOnShiftEnter && !suggestionsOpen) {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                  const start = textarea.selectionStart ?? text.length;
+                  const end = textarea.selectionEnd ?? start;
+                  if (start === end) {
+                    const marker = getListContinuation(text, start);
+                    if (marker) {
+                      event.preventDefault();
+                      const before = text.slice(0, start);
+                      const after = text.slice(end);
+                      const nextText = `${before}\n${marker}${after}`;
+                      const nextCursor = before.length + 1 + marker.length;
+                      applyTextInsertion(nextText, nextCursor);
+                      return;
+                    }
+                  }
+                }
+              }
+              event.preventDefault();
+              const textarea = textareaRef.current;
+              if (!textarea) {
+                return;
+              }
+              const start = textarea.selectionStart ?? text.length;
+              const end = textarea.selectionEnd ?? start;
+              const nextText = `${text.slice(0, start)}\n${text.slice(end)}`;
+              const nextCursor = start + 1;
+              applyTextInsertion(nextText, nextCursor);
+              return;
+            }
+            if (
+              event.key === "Tab" &&
+              !event.shiftKey &&
+              steerEnabled &&
+              isProcessing &&
+              !suggestionsOpen
+            ) {
+              event.preventDefault();
+              handleQueue();
+              return;
+            }
+            if (reviewPromptOpen && onReviewPromptKeyDown) {
+              const handled = onReviewPromptKeyDown(event);
+              if (handled) {
+                return;
+              }
+            }
+            handleInputKeyDown(event);
+            if (event.defaultPrevented) {
+              return;
+            }
+            if (event.key === "Enter" && !event.shiftKey) {
+              if (expandFenceOnEnter) {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                  const start = textarea.selectionStart ?? text.length;
+                  const end = textarea.selectionEnd ?? start;
+                  if (tryExpandFence(start, end)) {
                     event.preventDefault();
-                    const before = text.slice(0, start);
-                    const after = text.slice(end);
-                    const nextText = `${before}\n${marker}${after}`;
-                    const nextCursor = before.length + 1 + marker.length;
-                    applyTextInsertion(nextText, nextCursor);
                     return;
                   }
                 }
               }
-            }
-            event.preventDefault();
-            const textarea = textareaRef.current;
-            if (!textarea) {
-              return;
-            }
-            const start = textarea.selectionStart ?? text.length;
-            const end = textarea.selectionEnd ?? start;
-            const nextText = `${text.slice(0, start)}\n${text.slice(end)}`;
-            const nextCursor = start + 1;
-            applyTextInsertion(nextText, nextCursor);
-            return;
-          }
-          if (
-            event.key === "Tab" &&
-            !event.shiftKey &&
-            steerEnabled &&
-            isProcessing &&
-            !suggestionsOpen
-          ) {
-            event.preventDefault();
-            handleQueue();
-            return;
-          }
-          if (reviewPromptOpen && onReviewPromptKeyDown) {
-            const handled = onReviewPromptKeyDown(event);
-            if (handled) {
-              return;
-            }
-          }
-          handleInputKeyDown(event);
-          if (event.defaultPrevented) {
-            return;
-          }
-          if (event.key === "Enter" && !event.shiftKey) {
-            if (expandFenceOnEnter) {
-              const textarea = textareaRef.current;
-              if (textarea) {
-                const start = textarea.selectionStart ?? text.length;
-                const end = textarea.selectionEnd ?? start;
-                if (tryExpandFence(start, end)) {
-                  event.preventDefault();
-                  return;
-                }
+              if (isDictationBusy) {
+                event.preventDefault();
+                return;
               }
-            }
-            if (isDictationBusy) {
               event.preventDefault();
-              return;
+              handleSend();
             }
-            event.preventDefault();
-            handleSend();
-          }
-        }}
-        textareaRef={textareaRef}
-        suggestionsOpen={suggestionsOpen}
-        suggestions={suggestions}
-        highlightIndex={highlightIndex}
-        onHighlightIndex={setHighlightIndex}
-        onSelectSuggestion={applyAutocomplete}
-        reviewPrompt={reviewPrompt}
-        onReviewPromptClose={onReviewPromptClose}
-        onReviewPromptShowPreset={onReviewPromptShowPreset}
-        onReviewPromptChoosePreset={onReviewPromptChoosePreset}
-        highlightedPresetIndex={highlightedPresetIndex}
-        onReviewPromptHighlightPreset={onReviewPromptHighlightPreset}
-        highlightedBranchIndex={highlightedBranchIndex}
-        onReviewPromptHighlightBranch={onReviewPromptHighlightBranch}
-        highlightedCommitIndex={highlightedCommitIndex}
-        onReviewPromptHighlightCommit={onReviewPromptHighlightCommit}
-        onReviewPromptSelectBranch={onReviewPromptSelectBranch}
-        onReviewPromptSelectBranchAtIndex={onReviewPromptSelectBranchAtIndex}
-        onReviewPromptConfirmBranch={onReviewPromptConfirmBranch}
-        onReviewPromptSelectCommit={onReviewPromptSelectCommit}
-        onReviewPromptSelectCommitAtIndex={onReviewPromptSelectCommitAtIndex}
-        onReviewPromptConfirmCommit={onReviewPromptConfirmCommit}
-        onReviewPromptUpdateCustomInstructions={onReviewPromptUpdateCustomInstructions}
-        onReviewPromptConfirmCustom={onReviewPromptConfirmCustom}
-        engines={engines}
-        selectedEngine={selectedEngine}
-        onSelectEngine={onSelectEngine}
-        models={models}
-        selectedModelId={selectedModelId}
-        onSelectModel={onSelectModel}
-        collaborationModes={collaborationModes}
-        selectedCollaborationModeId={selectedCollaborationModeId}
-        onSelectCollaborationMode={onSelectCollaborationMode}
-        reasoningOptions={reasoningOptions}
-        selectedEffort={selectedEffort}
-        onSelectEffort={onSelectEffort}
-        reasoningSupported={reasoningSupported}
-        contextUsage={contextUsage}
-        accessMode={accessMode}
-        onSelectAccessMode={onSelectAccessMode}
-      />
+          }}
+          textareaRef={textareaRef}
+          suggestionsOpen={suggestionsOpen}
+          suggestions={suggestions}
+          highlightIndex={highlightIndex}
+          onHighlightIndex={setHighlightIndex}
+          onSelectSuggestion={applyAutocomplete}
+          reviewPrompt={reviewPrompt}
+          onReviewPromptClose={onReviewPromptClose}
+          onReviewPromptShowPreset={onReviewPromptShowPreset}
+          onReviewPromptChoosePreset={onReviewPromptChoosePreset}
+          highlightedPresetIndex={highlightedPresetIndex}
+          onReviewPromptHighlightPreset={onReviewPromptHighlightPreset}
+          highlightedBranchIndex={highlightedBranchIndex}
+          onReviewPromptHighlightBranch={onReviewPromptHighlightBranch}
+          highlightedCommitIndex={highlightedCommitIndex}
+          onReviewPromptHighlightCommit={onReviewPromptHighlightCommit}
+          onReviewPromptSelectBranch={onReviewPromptSelectBranch}
+          onReviewPromptSelectBranchAtIndex={onReviewPromptSelectBranchAtIndex}
+          onReviewPromptConfirmBranch={onReviewPromptConfirmBranch}
+          onReviewPromptSelectCommit={onReviewPromptSelectCommit}
+          onReviewPromptSelectCommitAtIndex={onReviewPromptSelectCommitAtIndex}
+          onReviewPromptConfirmCommit={onReviewPromptConfirmCommit}
+          onReviewPromptUpdateCustomInstructions={onReviewPromptUpdateCustomInstructions}
+          onReviewPromptConfirmCustom={onReviewPromptConfirmCustom}
+          engines={engines}
+          selectedEngine={selectedEngine}
+          onSelectEngine={onSelectEngine}
+          models={models}
+          selectedModelId={selectedModelId}
+          onSelectModel={onSelectModel}
+          collaborationModes={collaborationModes}
+          selectedCollaborationModeId={selectedCollaborationModeId}
+          onSelectCollaborationMode={onSelectCollaborationMode}
+          reasoningOptions={reasoningOptions}
+          selectedEffort={selectedEffort}
+          onSelectEffort={onSelectEffort}
+          reasoningSupported={reasoningSupported}
+          contextUsage={contextUsage}
+          accessMode={accessMode}
+          onSelectAccessMode={onSelectAccessMode}
+        />
+      </div>
     </footer>
   );
 }

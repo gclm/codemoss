@@ -423,7 +423,9 @@ type LayoutNodesOptions = {
   composerSendLabel?: string;
   composerLinkedKanbanPanels: { id: string; name: string; workspaceId: string }[];
   selectedComposerKanbanPanelId: string | null;
+  composerKanbanContextMode: "new" | "inherit";
   onSelectComposerKanbanPanel: (panelId: string | null) => void;
+  onComposerKanbanContextModeChange: (mode: "new" | "inherit") => void;
   onOpenComposerKanbanPanel: (panelId: string) => void;
   plan: TurnPlan | null;
   debugEntries: DebugEntry[];
@@ -622,6 +624,8 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       linkedKanbanPanels={options.composerLinkedKanbanPanels}
       selectedLinkedKanbanPanelId={options.selectedComposerKanbanPanelId}
       onSelectLinkedKanbanPanel={options.onSelectComposerKanbanPanel}
+      kanbanContextMode={options.composerKanbanContextMode}
+      onKanbanContextModeChange={options.onComposerKanbanContextModeChange}
       onOpenLinkedKanbanPanel={options.onOpenComposerKanbanPanel}
       reviewPrompt={options.reviewPrompt}
       onReviewPromptClose={options.onReviewPromptClose}

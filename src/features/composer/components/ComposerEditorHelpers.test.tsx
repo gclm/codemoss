@@ -13,12 +13,27 @@ vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (path: string) => `tauri://${path}`,
 }));
 
+vi.mock("../../engine/components/EngineSelector", () => ({
+  EngineSelector: () => null,
+}));
+
 type HarnessProps = {
   initialText?: string;
   editorSettings: ComposerEditorSettings;
+  linkedKanbanPanels?: { id: string; name: string; workspaceId: string }[];
+  selectedLinkedKanbanPanelId?: string | null;
+  kanbanContextMode?: "new" | "inherit";
+  onKanbanContextModeChange?: (mode: "new" | "inherit") => void;
 };
 
-function ComposerHarness({ initialText = "", editorSettings }: HarnessProps) {
+function ComposerHarness({
+  initialText = "",
+  editorSettings,
+  linkedKanbanPanels = [],
+  selectedLinkedKanbanPanelId = null,
+  kanbanContextMode = "new",
+  onKanbanContextModeChange,
+}: HarnessProps) {
   const [draftText, setDraftText] = useState(initialText);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -50,6 +65,10 @@ function ComposerHarness({ initialText = "", editorSettings }: HarnessProps) {
       textareaRef={textareaRef}
       dictationEnabled={false}
       editorSettings={editorSettings}
+      linkedKanbanPanels={linkedKanbanPanels}
+      selectedLinkedKanbanPanelId={selectedLinkedKanbanPanelId}
+      kanbanContextMode={kanbanContextMode}
+      onKanbanContextModeChange={onKanbanContextModeChange}
     />
   );
 }
@@ -166,5 +185,38 @@ describe("Composer editor helpers", () => {
     );
 
     harness.unmount();
+  });
+
+  it("shows context mode switch only when a linked panel is selected", async () => {
+    const onModeChange = vi.fn();
+    const harness = renderComposerHarness({
+      editorSettings: smartSettings,
+      linkedKanbanPanels: [{ id: "p-1", name: "Panel 1", workspaceId: "ws-1" }],
+      selectedLinkedKanbanPanelId: "p-1",
+      kanbanContextMode: "new",
+      onKanbanContextModeChange: onModeChange,
+    });
+
+    const modeButtons = harness.container.querySelectorAll(
+      ".composer-kanban-context-mode-btn",
+    );
+    expect(modeButtons.length).toBe(2);
+
+    await act(async () => {
+      (modeButtons[1] as HTMLButtonElement).click();
+    });
+    expect(onModeChange).toHaveBeenCalledWith("inherit");
+
+    harness.unmount();
+
+    const noSelectionHarness = renderComposerHarness({
+      editorSettings: smartSettings,
+      linkedKanbanPanels: [{ id: "p-1", name: "Panel 1", workspaceId: "ws-1" }],
+      selectedLinkedKanbanPanelId: null,
+    });
+    expect(
+      noSelectionHarness.container.querySelector(".composer-kanban-context-mode"),
+    ).toBeNull();
+    noSelectionHarness.unmount();
   });
 });

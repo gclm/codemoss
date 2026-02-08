@@ -377,6 +377,24 @@
   background: var(--surface-control-hover);
 }
 
+.kanban-return-chat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #666);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 6px;
+}
+
+.kanban-return-chat-link:hover {
+  background: var(--surface-control-hover);
+  color: var(--text-primary, #111);
+}
+
 .kanban-project-caret {
   color: var(--text-faint);
   font-size: 12px;
@@ -1172,4 +1190,3 @@
   color: var(--text-primary, #333);
   background: var(--bg-tertiary, #f0f0f0);
 }
-

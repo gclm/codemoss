@@ -102,6 +102,11 @@ import { useWorkspaceLaunchScript } from "./features/app/hooks/useWorkspaceLaunc
 import { useKanbanStore } from "./features/kanban/hooks/useKanbanStore";
 import { KanbanView } from "./features/kanban/components/KanbanView";
 import type { KanbanTask } from "./features/kanban/types";
+import {
+  resolveKanbanThreadCreationStrategy,
+  type KanbanContextMode,
+} from "./features/kanban/utils/contextMode";
+import { deriveKanbanTaskTitle } from "./features/kanban/utils/taskTitle";
 import { useWorkspaceLaunchScripts } from "./features/app/hooks/useWorkspaceLaunchScripts";
 import { useWorktreeSetupScript } from "./features/app/hooks/useWorktreeSetupScript";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
@@ -740,6 +745,7 @@ function MainApp() {
     triggerAutoThreadTitle,
     isThreadAutoNaming,
     startThreadForWorkspace,
+    forkThreadForWorkspace,
     listThreadsForWorkspace,
     loadOlderThreadsForWorkspace,
     resetWorkspaceThreads,
@@ -1516,6 +1522,8 @@ function MainApp() {
 
   const [selectedComposerKanbanPanelId, setSelectedComposerKanbanPanelId] =
     useState<string | null>(null);
+  const [composerKanbanContextMode, setComposerKanbanContextMode] =
+    useState<KanbanContextMode>("new");
   const composerKanbanWorkspaceIds = useMemo(() => {
     if (!activeWorkspace) {
       return [] as string[];
@@ -1629,26 +1637,62 @@ function MainApp() {
       const engine = (activeEngine === "codex" ? "codex" : "claude") as
         | "codex"
         | "claude";
-      const threadId = await startThreadForWorkspace(activeWorkspaceId, {
+      const isActiveThreadInWorkspace = Boolean(
+        activeWorkspaceId &&
+          activeThreadId &&
+          threadsByWorkspace[activeWorkspaceId]?.some(
+            (thread) => thread.id === activeThreadId,
+          ),
+      );
+      const threadCreationStrategy = resolveKanbanThreadCreationStrategy({
+        mode: composerKanbanContextMode,
         engine,
-        activate: false,
+        activeThreadId,
+        activeWorkspaceId,
+        targetWorkspaceId: workspace.id,
+        isActiveThreadInWorkspace,
       });
-      if (!threadId) {
+      const canInheritViaFork = threadCreationStrategy === "inherit";
+      const threadId =
+        canInheritViaFork && activeThreadId
+          ? await forkThreadForWorkspace(activeWorkspaceId, activeThreadId, {
+              activate: false,
+            })
+          : await startThreadForWorkspace(activeWorkspaceId, {
+              engine,
+              activate: false,
+            });
+      const resolvedThreadId =
+        threadId ??
+        (await startThreadForWorkspace(activeWorkspaceId, {
+          engine,
+          activate: false,
+        }));
+      if (!resolvedThreadId) {
         return;
+      }
+      if (canInheritViaFork && !threadId) {
+        addDebugEntry({
+          id: `${Date.now()}-kanban-linked-fork-fallback`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "kanban/linked fork fallback",
+          payload: {
+            workspaceId: activeWorkspaceId,
+            reason: "fork-unavailable",
+          },
+        });
       }
 
       if (textForSending.length > 0 || images.length > 0) {
-        await sendUserMessageToThread(workspace, threadId, textForSending, images);
+        await sendUserMessageToThread(workspace, resolvedThreadId, textForSending, images);
       }
 
       const taskDescription = textForSending.length > 0 ? textForSending : trimmedOriginalText;
-      const taskTitleSource =
-        taskDescription.split("\n").find((line) => line.trim().length > 0) ??
-        "";
-      const taskTitle =
-        taskTitleSource.trim().slice(0, 80) ||
+      const taskFallbackTitle =
         composerLinkedKanbanPanels.find((panel) => panel.id === panelId)?.name ||
         "Kanban Task";
+      const taskTitle = deriveKanbanTaskTitle(taskDescription, taskFallbackTitle);
       const createdTask = kanbanCreateTask({
         workspaceId: activeWorkspaceId,
         panelId,
@@ -1662,7 +1706,7 @@ function MainApp() {
       });
 
       kanbanUpdateTask(createdTask.id, {
-        threadId,
+        threadId: resolvedThreadId,
         status: "inprogress",
       });
     },
@@ -1673,9 +1717,14 @@ function MainApp() {
       workspacesById,
       connectWorkspace,
       startThreadForWorkspace,
+      forkThreadForWorkspace,
       sendUserMessageToThread,
       isPullRequestComposer,
       activeEngine,
+      activeThreadId,
+      threadsByWorkspace,
+      addDebugEntry,
+      composerKanbanContextMode,
       effectiveSelectedModelId,
       composerLinkedKanbanPanels,
       kanbanCreateTask,
@@ -2605,7 +2654,9 @@ function MainApp() {
     composerSendLabel,
     composerLinkedKanbanPanels,
     selectedComposerKanbanPanelId,
+    composerKanbanContextMode,
     onSelectComposerKanbanPanel: setSelectedComposerKanbanPanelId,
+    onComposerKanbanContextModeChange: setComposerKanbanContextMode,
     onOpenComposerKanbanPanel: handleOpenComposerKanbanPanel,
     showComposer,
     plan: activePlan,
