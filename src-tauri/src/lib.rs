@@ -19,6 +19,7 @@ fn get_pending_open_paths() -> Vec<String> {
 mod backend;
 mod claude_commands;
 mod client_storage;
+mod input_history;
 mod codex;
 mod engine;
 mod files;
@@ -214,6 +215,11 @@ pub fn run() {
             // Client storage
             client_storage::client_store_read,
             client_storage::client_store_write,
+            // Input history
+            input_history::input_history_read,
+            input_history::input_history_record,
+            input_history::input_history_delete,
+            input_history::input_history_clear,
             // Open paths
             get_pending_open_paths
         ])

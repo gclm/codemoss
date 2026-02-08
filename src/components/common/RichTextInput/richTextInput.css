@@ -194,3 +194,10 @@
   align-items: center;
   gap: 8px;
 }
+
+/* Ghost text overlay: match textarea padding/font */
+.rich-text-input .composer-ghost-text-overlay {
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.5;
+}

@@ -43,6 +43,9 @@ export type RichTextInputProps = {
   textareaRef?: RefObject<HTMLTextAreaElement | null>;
   onKeyDown?: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onSelectionChange?: (selectionStart: number | null) => void;
+
+  // 历史补全 ghost text
+  ghostTextSuffix?: string;
 };
 
 export function RichTextInput({
@@ -67,6 +70,7 @@ export function RichTextInput({
   textareaRef: externalRef,
   onKeyDown,
   onSelectionChange,
+  ghostTextSuffix,
 }: RichTextInputProps) {
   const { t } = useTranslation();
   const internalRef = useRef<HTMLTextAreaElement | null>(null);
@@ -198,21 +202,29 @@ export function RichTextInput({
           className={attachmentsClassName}
         />
 
-        <textarea
-          ref={textareaRef}
-          className={`rich-text-textarea ${inputClassName}`.trim()}
-          placeholder={placeholder}
-          value={value}
-          onChange={handleTextareaChange}
-          onSelect={handleTextareaSelect}
-          disabled={disabled}
-          onKeyDown={onKeyDown}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onPaste={handleTextareaPaste}
-        />
+        <div style={{ position: "relative" }}>
+          <textarea
+            ref={textareaRef}
+            className={`rich-text-textarea ${inputClassName}`.trim()}
+            placeholder={placeholder}
+            value={value}
+            onChange={handleTextareaChange}
+            onSelect={handleTextareaSelect}
+            disabled={disabled}
+            onKeyDown={onKeyDown}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onPaste={handleTextareaPaste}
+          />
+          {ghostTextSuffix && (
+            <div className="composer-ghost-text-overlay" aria-hidden>
+              <span className="composer-ghost-text-prefix">{value}</span>
+              <span className="composer-ghost-text-suffix">{ghostTextSuffix}</span>
+            </div>
+          )}
+        </div>
 
         {(footerLeft || footerRight) && (
           <div className={`rich-text-input-footer ${footerClassName}`.trim()}>

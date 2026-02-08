@@ -46,7 +46,7 @@ type KanbanBoardProps = {
   engineStatuses: EngineStatus[];
   conversationNode: ReactNode | null;
   selectedTaskId: string | null;
-  taskProcessingMap: Record<string, boolean>;
+  taskProcessingMap: Record<string, { isProcessing: boolean; startedAt: number | null }>;
   onSelectTask: (task: KanbanTask) => void;
   onCloseConversation: () => void;
   onDragToInProgress: (task: KanbanTask) => void;

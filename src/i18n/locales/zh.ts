@@ -359,6 +359,23 @@ const zh = {
     continueListsOnShiftEnter: "Shift+Enter 继续列表",
     continueListsOnShiftEnterDesc: "当行有内容时继续编号和项目符号列表。",
 
+    // 历史输入补全
+    historyCompletionSubtitle: "历史输入补全",
+    historyCompletion: "启用历史输入补全",
+    historyCompletionDesc: "输入时根据历史记录显示补全建议，按 Tab 键接受。",
+    historyManageTitle: "管理历史记录",
+    historyManageEmpty: "暂无历史记录",
+    historyAdd: "添加",
+    historyClearLow: "清空低重要度",
+    historyClearAll: "清空全部",
+    historyImportance: "重要度",
+    historyEditorAddTitle: "添加历史记录",
+    historyEditorEditTitle: "编辑历史记录",
+    historyEditorContent: "内容",
+    historyEditorContentPlaceholder: "输入要添加的文本…",
+    historyEditorImportance: "重要度",
+    historyEditorImportanceHint: "重要度越高，补全时优先级越高",
+
     // Dictation 部分
     dictationTitle: "语音输入",
     dictationDescription: "启用带设备端转录的麦克风语音输入。",

@@ -27,6 +27,8 @@ import {
 } from "../../../utils/composerText";
 import { useComposerAutocompleteState } from "../hooks/useComposerAutocompleteState";
 import { usePromptHistory } from "../hooks/usePromptHistory";
+import { useInlineHistoryCompletion } from "../hooks/useInlineHistoryCompletion";
+import { recordHistory as recordInputHistory } from "../hooks/useInputHistoryStore";
 import { ComposerInput } from "./ComposerInput";
 import { ComposerQueue } from "./ComposerQueue";
 import { StatusPanel } from "../../status-panel/components/StatusPanel";
@@ -298,12 +300,20 @@ export function Composer({
     setSelectionStart,
   });
 
+  const inlineCompletion = useInlineHistoryCompletion();
+
   const handleTextChangeWithHistory = useCallback(
     (next: string, cursor: number | null) => {
       handleHistoryTextChange(next);
       handleTextChange(next, cursor);
+      // Update inline history completion
+      if (!suggestionsOpen) {
+        inlineCompletion.updateQuery(next);
+      } else {
+        inlineCompletion.clear();
+      }
     },
-    [handleHistoryTextChange, handleTextChange],
+    [handleHistoryTextChange, handleTextChange, suggestionsOpen, inlineCompletion],
   );
 
   const handleSend = useCallback(() => {
@@ -316,7 +326,9 @@ export function Composer({
     }
     if (trimmed) {
       recordHistory(trimmed);
+      recordInputHistory(trimmed);
     }
+    inlineCompletion.clear();
     onSend(trimmed, attachedImages);
     resetHistoryNavigation();
     setComposerText("");
@@ -613,6 +625,7 @@ export function Composer({
         disabled={disabled}
         sendLabel={sendLabel}
         canStop={canStop}
+        ghostTextSuffix={inlineCompletion.suffix}
         canSend={canSend}
         isProcessing={isProcessing}
         onStop={onStop}
@@ -694,6 +707,27 @@ export function Composer({
             const nextCursor = start + 1;
             applyTextInsertion(nextText, nextCursor);
             return;
+          }
+          // Tab to accept inline history completion
+          if (
+            event.key === "Tab" &&
+            !event.shiftKey &&
+            inlineCompletion.hasSuggestion &&
+            !suggestionsOpen
+          ) {
+            const fullText = inlineCompletion.applySuggestion();
+            if (fullText) {
+              event.preventDefault();
+              setComposerText(fullText);
+              requestAnimationFrame(() => {
+                const textarea = textareaRef.current;
+                if (textarea) {
+                  textarea.setSelectionRange(fullText.length, fullText.length);
+                  setSelectionStart(fullText.length);
+                }
+              });
+              return;
+            }
           }
           if (
             event.key === "Tab" &&

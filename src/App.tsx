@@ -1969,10 +1969,14 @@ function MainApp() {
 
   // Compute which kanban tasks are currently processing (AI responding)
   const taskProcessingMap = useMemo(() => {
-    const map: Record<string, boolean> = {};
+    const map: Record<string, { isProcessing: boolean; startedAt: number | null }> = {};
     for (const task of kanbanTasks) {
       if (task.threadId) {
-        map[task.id] = threadStatusById[task.threadId]?.isProcessing ?? false;
+        const status = threadStatusById[task.threadId];
+        map[task.id] = {
+          isProcessing: status?.isProcessing ?? false,
+          startedAt: status?.processingStartedAt ?? null,
+        };
       }
     }
     return map;
@@ -1984,7 +1988,7 @@ function MainApp() {
     const prev = prevProcessingMapRef.current;
     for (const task of kanbanTasks) {
       const wasProcessing = prev[task.id] ?? false;
-      const nowProcessing = taskProcessingMap[task.id] ?? false;
+      const nowProcessing = taskProcessingMap[task.id]?.isProcessing ?? false;
       if (wasProcessing === nowProcessing) continue;
 
       // AI finished processing (true → false): auto-move inprogress → testing
@@ -1996,7 +2000,11 @@ function MainApp() {
         kanbanUpdateTask(task.id, { status: "inprogress" });
       }
     }
-    prevProcessingMapRef.current = { ...taskProcessingMap };
+    const boolMap: Record<string, boolean> = {};
+    for (const [id, val] of Object.entries(taskProcessingMap)) {
+      boolMap[id] = val.isProcessing;
+    }
+    prevProcessingMapRef.current = boolMap;
   }, [taskProcessingMap, kanbanTasks, kanbanUpdateTask]);
 
   // Drag to "inprogress" auto-execute: create thread and send first message (without opening conversation panel)

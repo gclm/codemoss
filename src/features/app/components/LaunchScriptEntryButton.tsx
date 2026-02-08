@@ -95,7 +95,7 @@ export function LaunchScriptEntryButton({
           />
           <textarea
             className="launch-script-textarea"
-            placeholder="e.g. npm run dev"
+            placeholder="例如 npm run dev"
             value={draftScript}
             onChange={(event) => onDraftChange(event.target.value)}
             rows={6}

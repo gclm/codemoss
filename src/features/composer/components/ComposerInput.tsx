@@ -28,6 +28,7 @@ import FileIcon from "../../../components/FileIcon";
 import { EngineSelector } from "../../engine/components/EngineSelector";
 import { useComposerImageDrop } from "../hooks/useComposerImageDrop";
 import { ComposerAttachments } from "./ComposerAttachments";
+import { ComposerGhostText } from "./ComposerGhostText";
 import { DictationWaveform } from "../../dictation/components/DictationWaveform";
 import { ReviewInlinePrompt } from "./ReviewInlinePrompt";
 import type { ReviewPromptState, ReviewPromptStep } from "../../threads/hooks/useReviewPrompt";
@@ -108,6 +109,7 @@ type ComposerInputProps = {
   contextUsage?: ThreadTokenUsage | null;
   accessMode?: AccessMode;
   onSelectAccessMode?: (mode: AccessMode) => void;
+  ghostTextSuffix?: string;
 };
 
 const isFileSuggestion = (item: AutocompleteItem) =>
@@ -217,6 +219,7 @@ export function ComposerInput({
   contextUsage,
   accessMode,
   onSelectAccessMode,
+  ghostTextSuffix,
 }: ComposerInputProps) {
   const { t } = useTranslation();
   const suggestionListRef = useRef<HTMLDivElement | null>(null);
@@ -416,27 +419,36 @@ export function ComposerInput({
           disabled={disabled}
           onRemoveAttachment={onRemoveAttachment}
         />
-        <textarea
-          ref={textareaRef}
-          className="composer-textarea"
-          placeholder={
-            disabled
-              ? "Review in progress. Chat will re-enable when it completes."
-              : engineName
-                ? t("composer.placeholderAskWithEngine", { engineName })
-                : t("composer.placeholderAsk")
-          }
-          value={text}
-          onChange={handleTextareaChange}
-          onSelect={handleTextareaSelect}
-          disabled={disabled}
-          onKeyDown={onKeyDown}
-          onDragOver={handleDragOver}
-          onDragEnter={handleDragEnter}
-          onDragLeave={handleDragLeave}
-          onDrop={handleDrop}
-          onPaste={handleTextareaPaste}
-        />
+        <div className="composer-textarea-wrapper">
+          <textarea
+            ref={textareaRef}
+            className="composer-textarea"
+            placeholder={
+              disabled
+                ? "Review in progress. Chat will re-enable when it completes."
+                : engineName
+                  ? t("composer.placeholderAskWithEngine", { engineName })
+                  : t("composer.placeholderAsk")
+            }
+            value={text}
+            onChange={handleTextareaChange}
+            onSelect={handleTextareaSelect}
+            disabled={disabled}
+            onKeyDown={onKeyDown}
+            onDragOver={handleDragOver}
+            onDragEnter={handleDragEnter}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onPaste={handleTextareaPaste}
+          />
+          {ghostTextSuffix && (
+            <ComposerGhostText
+              text={text}
+              suffix={ghostTextSuffix}
+              textareaRef={textareaRef}
+            />
+          )}
+        </div>
         
         <div className="composer-input-footer">
           <div className="composer-input-footer-left">

@@ -359,6 +359,23 @@ const en = {
     continueListsOnShiftEnter: "Continue lists on Shift+Enter",
     continueListsOnShiftEnterDesc: "Continues numbered and bulleted lists when the line has content.",
 
+    // History input completion
+    historyCompletionSubtitle: "History Input Completion",
+    historyCompletion: "Enable history input completion",
+    historyCompletionDesc: "Shows completion suggestions from history while typing. Press Tab to accept.",
+    historyManageTitle: "Manage history records",
+    historyManageEmpty: "No history records",
+    historyAdd: "Add",
+    historyClearLow: "Clear low importance",
+    historyClearAll: "Clear all",
+    historyImportance: "Importance",
+    historyEditorAddTitle: "Add history record",
+    historyEditorEditTitle: "Edit history record",
+    historyEditorContent: "Content",
+    historyEditorContentPlaceholder: "Enter text to add...",
+    historyEditorImportance: "Importance",
+    historyEditorImportanceHint: "Higher importance means higher priority in completion suggestions",
+
     // Dictation section
     dictationTitle: "Dictation",
     dictationDescription: "Enable microphone dictation with on-device transcription.",

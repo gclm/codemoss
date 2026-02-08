@@ -8,7 +8,7 @@ type KanbanColumnProps = {
   column: KanbanColumnDef;
   tasks: KanbanTask[];
   selectedTaskId: string | null;
-  taskProcessingMap: Record<string, boolean>;
+  taskProcessingMap: Record<string, { isProcessing: boolean; startedAt: number | null }>;
   onAddTask: () => void;
   onEditTask: (task: KanbanTask) => void;
   onDeleteTask: (taskId: string) => void;
@@ -61,7 +61,8 @@ export function KanbanColumn({
                 task={task}
                 index={index}
                 isSelected={task.id === selectedTaskId}
-                isProcessing={taskProcessingMap[task.id] ?? false}
+                isProcessing={taskProcessingMap[task.id]?.isProcessing ?? false}
+                processingStartedAt={taskProcessingMap[task.id]?.startedAt ?? null}
                 onSelect={() => onSelectTask(task)}
                 onEdit={() => onEditTask(task)}
                 onDelete={() => onDeleteTask(task.id)}

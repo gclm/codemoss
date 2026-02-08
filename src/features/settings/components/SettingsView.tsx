@@ -49,6 +49,11 @@ import { useGlobalAgentsMd } from "../hooks/useGlobalAgentsMd";
 import { useGlobalCodexConfigToml } from "../hooks/useGlobalCodexConfigToml";
 import { FileEditorCard } from "../../shared/components/FileEditorCard";
 import { LanguageSelector } from "./LanguageSelector";
+import { HistoryCompletionSettings } from "./HistoryCompletionSettings";
+import {
+  isHistoryCompletionEnabled,
+  setHistoryCompletionEnabled,
+} from "../../composer/hooks/useInputHistoryStore";
 
 // Feature flag to show/hide Codex and Experimental sections
 // Set to true to show these menu items
@@ -316,6 +321,14 @@ export function SettingsView({
   const [openAppSelectedId, setOpenAppSelectedId] = useState(
     appSettings.selectedOpenAppId,
   );
+  const [historyCompletionEnabled, setHistoryCompletionEnabledState] = useState(
+    () => isHistoryCompletionEnabled(),
+  );
+  const handleHistoryCompletionToggle = useCallback(() => {
+    const next = !historyCompletionEnabled;
+    setHistoryCompletionEnabledState(next);
+    setHistoryCompletionEnabled(next);
+  }, [historyCompletionEnabled]);
   const [doctorState, setDoctorState] = useState<{
     status: "idle" | "running" | "done";
     result: CodexDoctorResult | null;
@@ -1762,6 +1775,25 @@ export function SettingsView({
                     <span className="settings-toggle-knob" />
                   </button>
                 </div>
+                <div className="settings-divider" />
+                <div className="settings-subsection-title">{t("settings.historyCompletionSubtitle")}</div>
+                <div className="settings-toggle-row">
+                  <div>
+                    <div className="settings-toggle-title">{t("settings.historyCompletion")}</div>
+                    <div className="settings-toggle-subtitle">
+                      {t("settings.historyCompletionDesc")}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`settings-toggle ${historyCompletionEnabled ? "on" : ""}`}
+                    onClick={handleHistoryCompletionToggle}
+                    aria-pressed={historyCompletionEnabled}
+                  >
+                    <span className="settings-toggle-knob" />
+                  </button>
+                </div>
+                <HistoryCompletionSettings />
               </section>
             )}
             {activeSection === "dictation" && (

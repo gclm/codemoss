@@ -223,6 +223,10 @@
 }
 
 
+.composer-textarea-wrapper {
+  position: relative;
+}
+
 .composer-textarea {
   width: 100%;
   border: none;
@@ -458,6 +462,56 @@
   color: var(--text-strong);
 }
 
+:root[data-theme="light"] .composer-action.is-stop {
+  border-color: rgba(200, 45, 45, 0.4);
+  background: rgba(200, 45, 45, 0.1);
+  color: rgba(180, 40, 40, 0.9);
+}
+
+:root[data-theme="light"] .composer-action.is-stop:hover {
+  background: rgba(200, 45, 45, 0.18);
+}
+
+:root[data-theme="light"] .composer-action.is-stop:disabled {
+  background: rgba(200, 45, 45, 0.06);
+  color: rgba(200, 45, 45, 0.4);
+  border-color: rgba(200, 45, 45, 0.2);
+}
+
+:root[data-theme="light"] .composer-action--mic.is-active {
+  border-color: rgba(30, 155, 110, 0.45);
+  background: rgba(30, 155, 110, 0.1);
+  color: rgba(20, 120, 80, 0.9);
+}
+
+:root[data-theme="light"] .composer-action--mic.is-active:hover {
+  background: rgba(30, 155, 110, 0.18);
+}
+
+:root[data-theme="light"] .composer-action--mic.is-processing {
+  border-color: rgba(77, 153, 255, 0.4);
+  background: rgba(77, 153, 255, 0.1);
+}
+
+:root[data-theme="light"] .composer-action-spinner {
+  border-color: rgba(200, 45, 45, 0.2);
+  border-top-color: rgba(200, 45, 45, 0.7);
+}
+
+:root[data-theme="light"] .composer-waveform.is-processing {
+  background: linear-gradient(90deg, rgba(77, 153, 255, 0.08), rgba(30, 155, 110, 0.08));
+}
+
+:root[data-theme="light"] .composer-dictation-error {
+  border-color: rgba(200, 45, 45, 0.3);
+  background: rgba(200, 45, 45, 0.08);
+}
+
+:root[data-theme="light"] .composer-dictation-hint {
+  border-color: rgba(77, 153, 255, 0.3);
+  background: rgba(77, 153, 255, 0.08);
+}
+
 @media (prefers-color-scheme: light) {
   :root:not([data-theme]) .composer-action {
     border-color: var(--border-strong);
@@ -466,6 +520,56 @@
 
   :root:not([data-theme]) .composer-action:hover {
     color: var(--text-strong);
+  }
+
+  :root:not([data-theme]) .composer-action.is-stop {
+    border-color: rgba(200, 45, 45, 0.4);
+    background: rgba(200, 45, 45, 0.1);
+    color: rgba(180, 40, 40, 0.9);
+  }
+
+  :root:not([data-theme]) .composer-action.is-stop:hover {
+    background: rgba(200, 45, 45, 0.18);
+  }
+
+  :root:not([data-theme]) .composer-action.is-stop:disabled {
+    background: rgba(200, 45, 45, 0.06);
+    color: rgba(200, 45, 45, 0.4);
+    border-color: rgba(200, 45, 45, 0.2);
+  }
+
+  :root:not([data-theme]) .composer-action--mic.is-active {
+    border-color: rgba(30, 155, 110, 0.45);
+    background: rgba(30, 155, 110, 0.1);
+    color: rgba(20, 120, 80, 0.9);
+  }
+
+  :root:not([data-theme]) .composer-action--mic.is-active:hover {
+    background: rgba(30, 155, 110, 0.18);
+  }
+
+  :root:not([data-theme]) .composer-action--mic.is-processing {
+    border-color: rgba(77, 153, 255, 0.4);
+    background: rgba(77, 153, 255, 0.1);
+  }
+
+  :root:not([data-theme]) .composer-action-spinner {
+    border-color: rgba(200, 45, 45, 0.2);
+    border-top-color: rgba(200, 45, 45, 0.7);
+  }
+
+  :root:not([data-theme]) .composer-waveform.is-processing {
+    background: linear-gradient(90deg, rgba(77, 153, 255, 0.08), rgba(30, 155, 110, 0.08));
+  }
+
+  :root:not([data-theme]) .composer-dictation-error {
+    border-color: rgba(200, 45, 45, 0.3);
+    background: rgba(200, 45, 45, 0.08);
+  }
+
+  :root:not([data-theme]) .composer-dictation-hint {
+    border-color: rgba(77, 153, 255, 0.3);
+    background: rgba(77, 153, 255, 0.08);
   }
 }
 
@@ -1077,4 +1181,38 @@
   .composer-input-footer-left {
     gap: 4px;
   }
+}
+
+/* ─── Inline history completion ghost text ─── */
+
+.composer-ghost-text-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  /* Must match .composer-textarea exactly */
+  font-size: 14px;
+  line-height: 1.5;
+  font-family: inherit;
+  padding: 0;
+  border: none;
+  margin: 0;
+}
+
+.composer-ghost-text-prefix {
+  visibility: hidden;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.composer-ghost-text-suffix {
+  color: var(--text-muted, #6b7280);
+  opacity: 0.5;
+  white-space: pre-wrap;
+  word-wrap: break-word;
 }

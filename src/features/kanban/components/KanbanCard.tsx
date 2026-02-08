@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Draggable } from "@hello-pangea/dnd";
 import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
@@ -11,6 +11,7 @@ type KanbanCardProps = {
   index: number;
   isSelected?: boolean;
   isProcessing?: boolean;
+  processingStartedAt?: number | null;
   onSelect: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -23,10 +24,38 @@ const ENGINE_NAMES: Record<EngineType, string> = {
   opencode: "OpenCode",
 };
 
-export function KanbanCard({ task, index, isSelected, isProcessing, onSelect, onEdit, onDelete }: KanbanCardProps) {
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  if (minutes < 60) return `${minutes}m ${seconds.toString().padStart(2, "0")}s`;
+  const hours = Math.floor(minutes / 60);
+  const remainMinutes = minutes % 60;
+  return `${hours}h ${remainMinutes.toString().padStart(2, "0")}m`;
+}
+
+export function KanbanCard({ task, index, isSelected, isProcessing, processingStartedAt, onSelect, onEdit, onDelete }: KanbanCardProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const [elapsed, setElapsed] = useState("");
+
+  const updateElapsed = useCallback(() => {
+    if (isProcessing && processingStartedAt) {
+      setElapsed(formatElapsed(Date.now() - processingStartedAt));
+    }
+  }, [isProcessing, processingStartedAt]);
+
+  useEffect(() => {
+    if (!isProcessing || !processingStartedAt) {
+      setElapsed("");
+      return;
+    }
+    updateElapsed();
+    const timer = setInterval(updateElapsed, 1000);
+    return () => clearInterval(timer);
+  }, [isProcessing, processingStartedAt, updateElapsed]);
 
   useEffect(() => {
     if (!menuOpen) return;
@@ -105,6 +134,9 @@ export function KanbanCard({ task, index, isSelected, isProcessing, onSelect, on
               <span className="kanban-card-processing-text">
                 {t("kanban.task.processing")}
               </span>
+              {elapsed && (
+                <span className="kanban-card-elapsed">{elapsed}</span>
+              )}
             </div>
           )}
         </div>

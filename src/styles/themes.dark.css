@@ -8,7 +8,8 @@
   color-scheme: dark;
   --ui-font-family: "SF Pro Text", "SF Pro Display", -apple-system, "Helvetica Neue",
     sans-serif;
-  --code-font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco, monospace;
+  --code-font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco,
+    "Sarasa Mono SC", "Noto Sans Mono CJK SC", "Microsoft YaHei Mono", monospace;
   --code-font-size: 11px;
   --code-font-weight: 400;
   --code-line-height: 1.28;

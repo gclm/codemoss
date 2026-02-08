@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { X, ImagePlus, Sparkles, Loader2 } from "lucide-react";
 import type { EngineStatus, EngineType } from "../../../types";
 import type { KanbanTaskStatus } from "../types";
 import { pickImageFiles, generateThreadTitle } from "../../../services/tauri";
 import { RichTextInput } from "../../../components/common/RichTextInput";
+import { useInlineHistoryCompletion } from "../../composer/hooks/useInlineHistoryCompletion";
+import { recordHistory as recordInputHistory } from "../../composer/hooks/useInputHistoryStore";
 
 type CreateTaskInput = {
   workspaceId: string;
@@ -39,6 +41,8 @@ export function TaskCreateModal({
 }: TaskCreateModalProps) {
   const { t, i18n } = useTranslation();
   const titleRef = useRef<HTMLInputElement>(null);
+  const descTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const inlineCompletion = useInlineHistoryCompletion();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -85,6 +89,7 @@ export function TaskCreateModal({
       setDescription("");
       setImages([]);
       setAutoStart(defaultStatus !== "todo");
+      inlineCompletion.clear();
       if (availableEngines.length > 0 && !availableEngines.find((e) => e.engineType === engineType)) {
         setEngineType(availableEngines[0].engineType);
       }
@@ -102,17 +107,20 @@ export function TaskCreateModal({
     }
   }, [engineType, engineStatuses]);
 
-  if (!isOpen) return null;
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedTitle = title.trim();
     if (!trimmedTitle) return;
+    const trimmedDesc = description.trim();
+    if (trimmedDesc) {
+      recordInputHistory(trimmedDesc);
+    }
+    inlineCompletion.clear();
     onSubmit({
       workspaceId,
       panelId,
       title: trimmedTitle,
-      description: description.trim(),
+      description: trimmedDesc,
       engineType,
       modelId,
       branchName: branchName.trim() || "main",
@@ -152,6 +160,39 @@ export function TaskCreateModal({
     setImages((prev) => prev.filter((p) => p !== path));
   };
 
+  const handleDescriptionChange = useCallback(
+    (next: string) => {
+      setDescription(next);
+      inlineCompletion.updateQuery(next);
+    },
+    [inlineCompletion],
+  );
+
+  const handleDescKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (
+        e.key === "Tab" &&
+        !e.shiftKey &&
+        inlineCompletion.hasSuggestion
+      ) {
+        e.preventDefault();
+        const fullText = inlineCompletion.applySuggestion();
+        if (fullText) {
+          setDescription(fullText);
+          requestAnimationFrame(() => {
+            const textarea = descTextareaRef.current;
+            if (textarea) {
+              textarea.setSelectionRange(fullText.length, fullText.length);
+            }
+          });
+        }
+      }
+    },
+    [inlineCompletion],
+  );
+
+  if (!isOpen) return null;
+
   return (
     <div className="kanban-modal-overlay" onClick={onCancel}>
       <div
@@ -187,7 +228,7 @@ export function TaskCreateModal({
 
             <RichTextInput
               value={description}
-              onChange={setDescription}
+              onChange={handleDescriptionChange}
               placeholder={t("kanban.task.descPlaceholder")}
               attachments={images}
               onAddAttachment={handlePickImages}
@@ -198,6 +239,9 @@ export function TaskCreateModal({
               minHeight={80}
               maxHeight={300}
               className="kanban-rich-input"
+              textareaRef={descTextareaRef}
+              onKeyDown={handleDescKeyDown}
+              ghostTextSuffix={inlineCompletion.suffix}
               footerLeft={
                 <>
                   <button

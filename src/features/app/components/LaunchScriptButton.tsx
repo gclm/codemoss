@@ -99,7 +99,7 @@ export function LaunchScriptButton({
           <div className="launch-script-title">{t("composer.launchScript")}</div>
           <textarea
             className="launch-script-textarea"
-            placeholder="e.g. npm run dev"
+            placeholder="例如 npm run dev"
             value={draftScript}
             onChange={(event) => onDraftChange(event.target.value)}
             rows={6}
@@ -155,7 +155,7 @@ export function LaunchScriptButton({
               />
               <textarea
                 className="launch-script-textarea"
-                placeholder="e.g. npm run dev"
+                placeholder="例如 npm run dev"
                 value={newDraftScript}
                 onChange={(event) => onNewDraftChange(event.target.value)}
                 rows={5}
