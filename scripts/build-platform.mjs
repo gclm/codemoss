@@ -249,14 +249,10 @@ async function buildMacOS(arch, options = {}) {
     }
   }
 
-  // Create DMG
+  // Create DMG with drag-to-install panel
   ensureReleaseDir();
-  const dmgRoot = join(RELEASE_DIR, "dmg-root");
-  rmSync(dmgRoot, { recursive: true, force: true });
-  mkdirSync(dmgRoot, { recursive: true });
-
-  exec(`ditto "${bundlePath}" "${dmgRoot}/CodeMoss.app"`);
-  exec(`hdiutil create -volname "CodeMoss-Install" -srcfolder "${dmgRoot}" -ov -format UDZO "${RELEASE_DIR}/${dmgName}"`);
+  const createDmgScript = join(ROOT_DIR, "scripts", "create-dmg.sh");
+  exec(`bash "${createDmgScript}" "${bundlePath}" "${RELEASE_DIR}/${dmgName}" "CodeMoss-Install"`);
 
   // Notarize
   if (!skipNotarize && !skipSign) {

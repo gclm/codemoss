@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { X, ImagePlus } from "lucide-react";
+import { X, ImagePlus, Sparkles, Loader2 } from "lucide-react";
 import type { EngineStatus, EngineType } from "../../../types";
 import type { KanbanTaskStatus } from "../types";
-import { pickImageFiles } from "../../../services/tauri";
+import { pickImageFiles, generateThreadTitle } from "../../../services/tauri";
 import { RichTextInput } from "../../../components/common/RichTextInput";
 
 type CreateTaskInput = {
@@ -37,7 +37,7 @@ export function TaskCreateModal({
   onSubmit,
   onCancel,
 }: TaskCreateModalProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const titleRef = useRef<HTMLInputElement>(null);
 
   const [title, setTitle] = useState("");
@@ -46,6 +46,7 @@ export function TaskCreateModal({
   const [modelId, setModelId] = useState<string | null>(null);
   const [images, setImages] = useState<string[]>([]);
   const [autoStart, setAutoStart] = useState(false);
+  const [isGeneratingTitle, setIsGeneratingTitle] = useState(false);
 
   // branchName is always "main" - no UI control needed
   const branchName = "main";
@@ -55,6 +56,17 @@ export function TaskCreateModal({
     (e) => e.engineType === engineType
   );
   const availableModels = selectedEngine?.models ?? [];
+
+  const handlePickImages = async () => {
+    try {
+      const paths = await pickImageFiles();
+      if (paths.length > 0) {
+        setImages((prev) => [...prev, ...paths]);
+      }
+    } catch {
+      // user cancelled
+    }
+  };
 
   const formatEngineName = (type: EngineType): string => {
     switch (type) {
@@ -109,14 +121,26 @@ export function TaskCreateModal({
     });
   };
 
-  const handlePickImages = async () => {
+  const handleGenerateTitle = async () => {
+    const trimmedDesc = description.trim();
+    if (!trimmedDesc || isGeneratingTitle) return;
+    setIsGeneratingTitle(true);
     try {
-      const paths = await pickImageFiles();
-      if (paths.length > 0) {
-        setImages((prev) => [...prev, ...paths]);
+      const language = i18n.language.toLowerCase().startsWith("zh") ? "zh" : "en";
+      const generated = await generateThreadTitle(
+        workspaceId,
+        "temp-title-gen",
+        trimmedDesc,
+        language,
+      );
+      const result = generated.trim();
+      if (result) {
+        setTitle(result);
       }
     } catch {
-      // user cancelled
+      // generation failed silently
+    } finally {
+      setIsGeneratingTitle(false);
     }
   };
 
@@ -142,13 +166,24 @@ export function TaskCreateModal({
         </div>
         <form onSubmit={handleSubmit}>
           <div className="kanban-modal-body">
-            <input
-              ref={titleRef}
-              className="kanban-input kanban-task-title-input"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder={t("kanban.task.titlePlaceholder")}
-            />
+            <div className="kanban-task-title-row">
+              <input
+                ref={titleRef}
+                className="kanban-input kanban-task-title-input"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder={t("kanban.task.titlePlaceholder")}
+              />
+              <button
+                type="button"
+                className="kanban-icon-btn kanban-task-generate-btn"
+                onClick={handleGenerateTitle}
+                disabled={!description.trim() || isGeneratingTitle}
+                title={t("kanban.task.generateTitle")}
+              >
+                {isGeneratingTitle ? <Loader2 size={16} className="kanban-spin" /> : <Sparkles size={16} />}
+              </button>
+            </div>
 
             <RichTextInput
               value={description}

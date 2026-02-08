@@ -30,6 +30,13 @@
   --scrollbar-thumb-hover: #50525a;
 }
 
+/* Native select/option dark mode fix (Windows WebView2) */
+:root[data-theme="dim"] select,
+:root[data-theme="dim"] select option {
+  background-color: #292c33;
+  color: #e6e7ea;
+}
+
 :root[data-theme="dim"] .app.reduced-transparency {
   --surface-sidebar: #292c33;
   --surface-sidebar-opaque: #292c33;

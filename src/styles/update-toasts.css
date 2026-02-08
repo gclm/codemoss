@@ -81,7 +81,7 @@
   background: var(--surface-card-muted);
   padding: 8px;
   margin-bottom: 10px;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 

@@ -656,7 +656,7 @@
 
 .settings-doctor-path {
   word-break: break-all;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 .settings-empty {
   color: var(--text-faint);

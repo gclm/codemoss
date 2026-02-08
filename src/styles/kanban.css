@@ -969,9 +969,37 @@
   display: flex;
 }
 
+.kanban-task-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kanban-task-title-row .kanban-input {
+  flex: 1;
+}
+
 .kanban-task-title-input {
   font-size: 16px;
   font-weight: 500;
+}
+
+.kanban-task-generate-btn {
+  flex-shrink: 0;
+  color: var(--text-tertiary, #999);
+}
+
+.kanban-task-generate-btn:hover:not(:disabled) {
+  color: var(--accent-color, #3b82f6);
+}
+
+.kanban-task-generate-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.kanban-spin {
+  animation: kanban-spin 0.8s linear infinite;
 }
 
 /* --- Task Images --- */
@@ -1144,3 +1172,4 @@
   color: var(--text-primary, #333);
   background: var(--bg-tertiary, #f0f0f0);
 }
+

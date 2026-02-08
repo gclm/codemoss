@@ -1130,6 +1130,7 @@ const zh = {
       delete: "删除",
       linked: "已关联",
       processing: "处理中...",
+      generateTitle: "生成标题",
     },
     conversation: {
       close: "关闭",

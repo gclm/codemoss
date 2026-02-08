@@ -1130,6 +1130,7 @@ const en = {
       delete: "Delete",
       linked: "Linked",
       processing: "Processing...",
+      generateTitle: "Generate title",
     },
     conversation: {
       close: "Close",

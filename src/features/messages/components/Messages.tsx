@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -555,7 +555,26 @@ export const Messages = memo(function Messages({
             (!workspaceId || request.workspace_id === workspaceId),
         )?.request_id ?? null)
       : null;
-  const scrollKey = `${scrollKeyForItems(items)}-${activeUserInputRequestId ?? "no-input"}`;
+  const rawScrollKey = `${scrollKeyForItems(items)}-${activeUserInputRequestId ?? "no-input"}`;
+  // Throttle scrollKey during streaming to avoid flooding the main thread
+  // with smooth-scroll animations that block keyboard input.
+  const [scrollKey, setScrollKey] = useState(rawScrollKey);
+  const scrollThrottleRef = useRef<number>(0);
+  useEffect(() => {
+    if (scrollThrottleRef.current) {
+      window.clearTimeout(scrollThrottleRef.current);
+    }
+    scrollThrottleRef.current = window.setTimeout(() => {
+      startTransition(() => {
+        setScrollKey(rawScrollKey);
+      });
+    }, isThinking ? 120 : 0);
+    return () => {
+      if (scrollThrottleRef.current) {
+        window.clearTimeout(scrollThrottleRef.current);
+      }
+    };
+  }, [rawScrollKey, isThinking]);
   const { openFileLink, showFileLinkMenu } = useFileLinkOpener(
     workspacePath,
     openTargets,
@@ -585,7 +604,8 @@ export const Messages = memo(function Messages({
     if (!shouldScroll) {
       return;
     }
-    bottomRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    // Always use instant for programmatic scroll requests to avoid blocking input
+    bottomRef.current.scrollIntoView({ behavior: "instant", block: "end" });
   }, [isNearBottom]);
 
   useEffect(() => {
@@ -679,20 +699,17 @@ export const Messages = memo(function Messages({
     if (!shouldScroll) {
       return undefined;
     }
-    let raf1 = 0;
-    let raf2 = 0;
+    let raf = 0;
     const target = bottomRef.current;
-    raf1 = window.requestAnimationFrame(() => {
-      raf2 = window.requestAnimationFrame(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "end" });
-      });
+    // Use instant scroll during streaming to avoid blocking the main thread
+    // with smooth-scroll animations that compete with keyboard input events.
+    const scrollBehavior = isThinking ? "instant" as const : "smooth" as const;
+    raf = window.requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: scrollBehavior, block: "end" });
     });
     return () => {
-      if (raf1) {
-        window.cancelAnimationFrame(raf1);
-      }
-      if (raf2) {
-        window.cancelAnimationFrame(raf2);
+      if (raf) {
+        window.cancelAnimationFrame(raf);
       }
     };
   }, [scrollKey, isThinking, isNearBottom]);

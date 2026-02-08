@@ -34,10 +34,11 @@ export default function MermaidBlock({
   const copyTimeoutRef = useRef<number | null>(null);
   const idRef = useRef(`mermaid-${crypto.randomUUID()}`);
 
-  // debounce value for streaming output
+  // debounce value for streaming output – use a longer delay to avoid
+  // repeatedly re-rendering expensive Mermaid diagrams while chunks arrive.
   const [debouncedValue, setDebouncedValue] = useState(value);
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedValue(value), 300);
+    const timer = window.setTimeout(() => setDebouncedValue(value), 800);
     return () => window.clearTimeout(timer);
   }, [value]);
 

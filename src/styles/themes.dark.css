@@ -5,7 +5,7 @@
   background-color: transparent;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
-  color-scheme: light dark;
+  color-scheme: dark;
   --ui-font-family: "SF Pro Text", "SF Pro Display", -apple-system, "Helvetica Neue",
     sans-serif;
   --code-font-family: "SF Mono", "SFMono-Regular", Menlo, Monaco, monospace;
@@ -118,4 +118,17 @@
 .kanban-modal {
   background: #1e1e1e;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+
+/* Native select/option dark mode fix (Windows WebView2) */
+select,
+select option {
+  background-color: #1e1e1e;
+  color: #e6e7ea;
+}
+
+:root[data-theme="dark"] select,
+:root[data-theme="dark"] select option {
+  background-color: #1e1e1e;
+  color: #e6e7ea;
 }

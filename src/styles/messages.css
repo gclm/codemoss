@@ -151,8 +151,9 @@
   background: var(--surface-bubble);
   font-size: 14px;
   line-height: 1.45;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
+  min-width: 0;
 }
 
 .message-bubble {
@@ -560,7 +561,7 @@
   overflow: visible;
   text-overflow: unset;
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 
@@ -664,7 +665,7 @@
   color: var(--text-stronger);
   min-width: 0;
   flex: 0 1 auto;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 
@@ -673,7 +674,7 @@
   font-size: 11px;
   min-width: 0;
   flex: 1 1 auto;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
   word-break: break-word;
 }
 
@@ -938,7 +939,9 @@
 
 .markdown {
   white-space: normal;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  min-width: 0;
   font-size: 13px;
   line-height: 1.5;
   color: var(--text-stronger);
