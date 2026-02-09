@@ -84,7 +84,7 @@
 html,
 body {
   margin: 0;
-  background: transparent;
+  background: #0d0f14;
   overflow: hidden;
 }
 
@@ -98,7 +98,7 @@ body {
   width: 100vw;
   display: grid;
   grid-template-columns: var(--sidebar-width, 280px) 1fr;
-  background: transparent;
+  background: var(--surface-messages, #0d0f14);
   border-radius: 0;
   overflow: hidden;
   position: relative;

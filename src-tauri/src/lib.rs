@@ -101,8 +101,7 @@ pub fn run() {
             {
                 win_builder = win_builder
                     .title_bar_style(tauri::TitleBarStyle::Overlay)
-                    .hidden_title(true)
-                    .transparent(true);
+                    .hidden_title(true);
             }
 
             win_builder = win_builder.on_navigation(|url: &tauri::Url| {
@@ -115,7 +114,8 @@ pub fn run() {
                 }
 
                 // Allow localhost (dev server + memory iframe)
-                if host == "localhost" || host == "127.0.0.1" {
+                // Windows uses http://tauri.localhost/ as the internal webview origin
+                if host == "localhost" || host == "127.0.0.1" || host == "tauri.localhost" {
                     return true;
                 }
 
