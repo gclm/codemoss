@@ -51,8 +51,8 @@ const en = {
   // Sidebar
   sidebar: {
     projects: "Projects",
-    mcpMarket: "MCP Market",
-    skillsMarket: "Skills Market",
+    mcpSkillsMarket: "MCP & Skills Market",
+    longTermMemory: "Long-term Memory",
     pluginMarket: "Plugin Market",
     comingSoon: "Coming Soon",
     comingSoonMessage: "This feature is under development, stay tuned",
@@ -959,6 +959,11 @@ const en = {
     loading: "Loading...",
     searchOlder: "Search older...",
     loadOlder: "Load older...",
+    sessionStopped: "Session stopped.",
+    turnFailed: "Turn failed.",
+    turnFailedWithMessage: "Turn failed: {{message}}",
+    turnFailedToStart: "Turn failed to start.",
+    turnFailedToStartWithMessage: "Turn failed to start: {{message}}",
   },
 
   // Workspace
@@ -1368,6 +1373,10 @@ const en = {
     webRequest: "Web request",
     batchRun: "Batch run",
     searchMatch: "Search/Match",
+    batchReadFile: "Batch read files",
+    batchSearch: "Batch search",
+    batchSearchMatch: "Batch search/match",
+    batchEditFile: "Batch edit files",
     path: "Path",
     lineRange: "Line {{start}}-{{end}}",
     failedCount: "{{count}} failed",
@@ -1381,6 +1390,16 @@ const en = {
     used: "used",
     remaining: "remaining",
     unlimited: "Unlimited",
+  },
+  memory: {
+    checking: "Connecting to long-term memory service…",
+    offlineTitle: "Long-term Memory Service Unavailable",
+    offlineDesc: "Long-term memory is powered by the open-source project claude-mem. Follow the steps below to install it.",
+    offlineStepsTitle: "Open a new Claude Code session in your terminal and run:",
+    offlineStep1: "/plugin marketplace add thedotmack/claude-mem",
+    offlineStep2: "/plugin install claude-mem",
+    offlineStep3: "Restart Claude Code in terminal",
+    offlineStep4: "Restart CodeMoss",
   },
 };
 

@@ -2695,6 +2695,7 @@ function MainApp() {
     onWorkspaceDrop: handleWorkspaceDrop,
     appMode,
     onAppModeChange: setAppMode,
+    onOpenMemory: () => setCenterMode("memory"),
   });
 
   const workspaceHomeNode = activeWorkspace ? (

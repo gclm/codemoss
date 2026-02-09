@@ -31,6 +31,7 @@ type ThreadEventHandlersOptions = {
   ) => void;
   approvalAllowlistRef: MutableRefObject<Record<string, string[][]>>;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
+  interruptedThreadsRef: MutableRefObject<Set<string>>;
   renameCustomNameKey: (
     workspaceId: string,
     oldThreadId: string,
@@ -65,6 +66,7 @@ export function useThreadEventHandlers({
   applyCollabThreadLinks,
   approvalAllowlistRef,
   pendingInterruptsRef,
+  interruptedThreadsRef,
   renameCustomNameKey,
   renameAutoTitlePendingKey,
   renameThreadTitleMapping,
@@ -95,6 +97,7 @@ export function useThreadEventHandlers({
     safeMessageActivity,
     recordThreadActivity,
     applyCollabThreadLinks,
+    interruptedThreadsRef,
   });
 
   const {
@@ -116,6 +119,7 @@ export function useThreadEventHandlers({
     markReviewing,
     setActiveTurnId,
     pendingInterruptsRef,
+    interruptedThreadsRef,
     pushThreadErrorMessage,
     safeMessageActivity,
     recordThreadActivity,

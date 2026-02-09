@@ -211,7 +211,6 @@ export function KanbanBoard({
                   selectedTaskId={selectedTaskId}
                   taskProcessingMap={taskProcessingMap}
                   onAddTask={() => handleOpenCreate(col.id)}
-                  onEditTask={() => {}}
                   onDeleteTask={handleDeleteTask}
                   onSelectTask={onSelectTask}
                 />

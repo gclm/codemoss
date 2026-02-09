@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { Draggable } from "@hello-pangea/dnd";
-import { MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { MoreHorizontal, Trash2 } from "lucide-react";
 import type { KanbanTask } from "../types";
 import type { EngineType } from "../../../types";
 import { EngineIcon } from "../../engine/components/EngineIcon";
@@ -13,7 +13,6 @@ type KanbanCardProps = {
   isProcessing?: boolean;
   processingStartedAt?: number | null;
   onSelect: () => void;
-  onEdit: () => void;
   onDelete: () => void;
 };
 
@@ -35,7 +34,7 @@ function formatElapsed(ms: number): string {
   return `${hours}h ${remainMinutes.toString().padStart(2, "0")}m`;
 }
 
-export function KanbanCard({ task, index, isSelected, isProcessing, processingStartedAt, onSelect, onEdit, onDelete }: KanbanCardProps) {
+export function KanbanCard({ task, index, isSelected, isProcessing, processingStartedAt, onSelect, onDelete }: KanbanCardProps) {
   const { t } = useTranslation();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -99,17 +98,6 @@ export function KanbanCard({ task, index, isSelected, isProcessing, processingSt
               </button>
               {menuOpen && (
                 <div className="kanban-dropdown-menu">
-                  <button
-                    className="kanban-dropdown-item"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(false);
-                      onEdit();
-                    }}
-                  >
-                    <Pencil size={14} />
-                    {t("kanban.task.edit")}
-                  </button>
                   <button
                     className="kanban-dropdown-item kanban-dropdown-item-danger"
                     onClick={(e) => {

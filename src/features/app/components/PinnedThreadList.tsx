@@ -75,6 +75,7 @@ export function PinnedThreadList({
                 : ""
             }`}
             style={indentStyle}
+            data-tooltip={thread.name}
             onClick={() => onSelectThread(workspaceId, thread.id)}
             onContextMenu={(event) =>
               onShowThreadMenu(event, workspaceId, thread.id, canPin)

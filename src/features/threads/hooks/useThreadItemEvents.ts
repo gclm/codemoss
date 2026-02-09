@@ -1,5 +1,5 @@
 import { useCallback } from "react";
-import type { Dispatch } from "react";
+import type { Dispatch, MutableRefObject } from "react";
 import { buildConversationItem } from "../../../utils/threadItems";
 import { asString } from "../utils/threadNormalize";
 import type { ThreadAction } from "./useThreadsReducer";
@@ -31,6 +31,7 @@ type UseThreadItemEventsOptions = {
     threadId: string,
     item: Record<string, unknown>,
   ) => void;
+  interruptedThreadsRef: MutableRefObject<Set<string>>;
 };
 
 export function useThreadItemEvents({
@@ -42,6 +43,7 @@ export function useThreadItemEvents({
   safeMessageActivity,
   recordThreadActivity,
   applyCollabThreadLinks,
+  interruptedThreadsRef,
 }: UseThreadItemEventsOptions) {
   const handleItemUpdate = useCallback(
     (
@@ -133,6 +135,10 @@ export function useThreadItemEvents({
       itemId: string;
       delta: string;
     }) => {
+      // Skip late-arriving deltas for threads that have been interrupted
+      if (interruptedThreadsRef.current.has(threadId)) {
+        return;
+      }
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
       markProcessing(threadId, true);
       const hasCustomName = Boolean(getCustomName(workspaceId, threadId));
@@ -145,7 +151,7 @@ export function useThreadItemEvents({
         hasCustomName,
       });
     },
-    [dispatch, getCustomName, markProcessing],
+    [dispatch, getCustomName, interruptedThreadsRef, markProcessing],
   );
 
   const onAgentMessageCompleted = useCallback(

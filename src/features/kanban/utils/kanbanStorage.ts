@@ -45,3 +45,35 @@ export function loadKanbanData(): KanbanStoreData {
 export function saveKanbanData(data: KanbanStoreData): void {
   writeClientStoreValue("app", "kanban", data);
 }
+
+// --- Task creation draft persistence ---
+
+export type TaskDraft = {
+  title: string;
+  description: string;
+  engineType: string;
+  modelId: string | null;
+  images: string[];
+};
+
+const DRAFT_STORE_KEY = "kanban_task_draft";
+
+function draftKey(panelId: string): string {
+  return `${DRAFT_STORE_KEY}_${panelId}`;
+}
+
+export function loadTaskDraft(panelId: string): TaskDraft | null {
+  const stored = getClientStoreSync<TaskDraft>("app", draftKey(panelId));
+  if (!stored || (typeof stored.title !== "string" && typeof stored.description !== "string")) {
+    return null;
+  }
+  return stored;
+}
+
+export function saveTaskDraft(panelId: string, draft: TaskDraft): void {
+  writeClientStoreValue("app", draftKey(panelId), draft);
+}
+
+export function clearTaskDraft(panelId: string): void {
+  writeClientStoreValue("app", draftKey(panelId), null);
+}

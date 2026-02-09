@@ -63,6 +63,7 @@ export function useThreads({
   const loadedThreadsRef = useRef<Record<string, boolean>>({});
   const replaceOnResumeRef = useRef<Record<string, boolean>>({});
   const pendingInterruptsRef = useRef<Set<string>>(new Set());
+  const interruptedThreadsRef = useRef<Set<string>>(new Set());
   const { approvalAllowlistRef, handleApprovalDecision, handleApprovalRemember } =
     useThreadApprovals({ dispatch, onDebug });
   const { handleUserInputSubmit } = useThreadUserInput({ dispatch });
@@ -615,6 +616,7 @@ export function useThreads({
     activeTurnIdByThread: state.activeTurnIdByThread,
     rateLimitsByWorkspace: state.rateLimitsByWorkspace,
     pendingInterruptsRef,
+    interruptedThreadsRef,
     dispatch,
     getCustomName,
     getThreadEngine,
@@ -794,6 +796,7 @@ export function useThreads({
     applyCollabThreadLinks,
     approvalAllowlistRef,
     pendingInterruptsRef,
+    interruptedThreadsRef,
     renameCustomNameKey,
     renameAutoTitlePendingKey,
     renameThreadTitleMapping,

@@ -156,7 +156,7 @@ export const EditToolGroupBlock = memo(function EditToolGroupBlock({
       >
         <div className="task-title-section">
           <span className="codicon codicon-edit tool-title-icon" />
-          <span className="tool-title-text">{t("tools.editFile")}</span>
+          <span className="tool-title-text">{t("tools.batchEditFile")}</span>
           <span className="tool-title-summary" style={{
             color: 'var(--text-secondary)',
             marginLeft: '4px',

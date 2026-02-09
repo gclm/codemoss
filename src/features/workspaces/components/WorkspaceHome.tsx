@@ -293,6 +293,7 @@ export function WorkspaceHome({
                     key={thread.id}
                     type="button"
                     className="workspace-home-thread-item"
+                    data-tooltip={thread.title}
                     onClick={() => onSelectConversation(thread.workspaceId, thread.threadId)}
                   >
                     <span className={`workspace-home-thread-status ${statusClass}`} aria-hidden />

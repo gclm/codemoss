@@ -889,9 +889,8 @@
   background: var(--bg-primary, #fff);
   outline: none;
   cursor: pointer;
-  min-width: 0;
-  flex: 1;
   box-sizing: border-box;
+  max-width: 180px;
 }
 
 /* --- Dropdown Menu --- */
@@ -1009,8 +1008,6 @@
 }
 
 .kanban-task-selector {
-  flex: 1;
-  min-width: 0;
   display: flex;
 }
 

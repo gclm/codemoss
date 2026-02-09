@@ -1,5 +1,6 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
+import { useTranslation } from "react-i18next";
 import { interruptTurn as interruptTurnService } from "../../../services/tauri";
 import { getThreadTimestamp } from "../../../utils/threadItems";
 import {
@@ -30,6 +31,7 @@ type UseThreadTurnEventsOptions = {
   markReviewing: (threadId: string, isReviewing: boolean) => void;
   setActiveTurnId: (threadId: string, turnId: string | null) => void;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
+  interruptedThreadsRef: MutableRefObject<Set<string>>;
   pushThreadErrorMessage: (threadId: string, message: string) => void;
   safeMessageActivity: () => void;
   recordThreadActivity: (workspaceId: string, threadId: string, timestamp?: number) => void;
@@ -59,6 +61,7 @@ export function useThreadTurnEvents({
   markReviewing,
   setActiveTurnId,
   pendingInterruptsRef,
+  interruptedThreadsRef,
   pushThreadErrorMessage,
   safeMessageActivity,
   recordThreadActivity,
@@ -66,6 +69,7 @@ export function useThreadTurnEvents({
   renameAutoTitlePendingKey,
   renameThreadTitleMapping,
 }: UseThreadTurnEventsOptions) {
+  const { t } = useTranslation();
   const onThreadStarted = useCallback(
     (workspaceId: string, thread: Record<string, unknown>) => {
       const threadId = asString(thread.id);
@@ -90,7 +94,7 @@ export function useThreadTurnEvents({
       if (!customName && !isAutoTitlePending(workspaceId, threadId)) {
         const preview = asString(thread.preview).trim();
         if (preview) {
-          const name = preview.length > 38 ? `${preview.slice(0, 38)}…` : preview;
+          const name = preview;
           dispatch({ type: "setThreadName", workspaceId, threadId, name });
         }
       }
@@ -132,10 +136,11 @@ export function useThreadTurnEvents({
       markProcessing(threadId, false);
       setActiveTurnId(threadId, null);
       pendingInterruptsRef.current.delete(threadId);
+      interruptedThreadsRef.current.delete(threadId);
       // 重置分段计数，为下一个 turn 做准备
       dispatch({ type: "resetAgentSegment", threadId });
     },
-    [dispatch, markProcessing, pendingInterruptsRef, setActiveTurnId],
+    [dispatch, interruptedThreadsRef, markProcessing, pendingInterruptsRef, setActiveTurnId],
   );
 
   const onTurnPlanUpdated = useCallback(
@@ -189,6 +194,14 @@ export function useThreadTurnEvents({
       if (payload.willRetry) {
         return;
       }
+
+      // If this thread was interrupted by user, the error is expected
+      // (e.g. "Session stopped."). Clean up the interrupted flag and
+      // suppress the redundant error message since interruptTurn already
+      // displayed "Session stopped." to the user.
+      const wasInterrupted = interruptedThreadsRef.current.has(threadId);
+      interruptedThreadsRef.current.delete(threadId);
+
       dispatch({ type: "ensureThread", workspaceId, threadId, engine: inferEngineFromThreadId(threadId) });
       dispatch({
         type: "finalizePendingToolStatuses",
@@ -198,14 +211,18 @@ export function useThreadTurnEvents({
       markProcessing(threadId, false);
       markReviewing(threadId, false);
       setActiveTurnId(threadId, null);
-      const message = payload.message
-        ? `Turn failed: ${payload.message}`
-        : "Turn failed.";
-      pushThreadErrorMessage(threadId, message);
+
+      if (!wasInterrupted) {
+        const message = payload.message
+          ? t("threads.turnFailedWithMessage", { message: payload.message })
+          : t("threads.turnFailed");
+        pushThreadErrorMessage(threadId, message);
+      }
       safeMessageActivity();
     },
     [
       dispatch,
+      interruptedThreadsRef,
       markProcessing,
       markReviewing,
       pushThreadErrorMessage,

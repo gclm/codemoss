@@ -650,9 +650,7 @@ export function useThreadActions({
             const name = customName
               ? customName
               : preview.length > 0
-                ? preview.length > 38
-                  ? `${preview.slice(0, 38)}…`
-                  : preview
+                ? preview
                 : fallbackName;
             const engineSource = engineById.get(id) ?? ("codex" as const);
             return {
@@ -830,9 +828,7 @@ export function useThreadActions({
           const name = customName
             ? customName
             : preview.length > 0
-              ? preview.length > 38
-                ? `${preview.slice(0, 38)}…`
-                : preview
+              ? preview
               : fallbackName;
           additions.push({ id, name, updatedAt: getThreadTimestamp(thread) });
           existingIds.add(id);

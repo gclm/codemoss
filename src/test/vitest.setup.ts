@@ -7,8 +7,8 @@ vi.mock("react-i18next", () => ({
     init: vi.fn(),
   },
   useTranslation: () => ({
-    t: (key: string) => {
-      // Map keys to English text for tests
+    t: (key: string, params?: Record<string, string>) => {
+      // Map keys to Chinese text for tests (matching default language)
       const translations: Record<string, string> = {
         "update.title": "Update",
         "update.checkingForUpdates": "Checking for updates...",
@@ -336,8 +336,21 @@ vi.mock("react-i18next", () => ({
         "settings.steerModeDesc": "Send messages immediately. Use Tab to queue while a run is active.",
         // Error messages
         "settings.unableToOpenConfig": "Unable to open config.",
+        // Thread error messages
+        "threads.sessionStopped": "会话已停止。",
+        "threads.turnFailed": "会话失败。",
+        "threads.turnFailedWithMessage": "会话失败：{{message}}",
+        "threads.turnFailedToStart": "会话启动失败。",
+        "threads.turnFailedToStartWithMessage": "会话启动失败：{{message}}",
       };
-      return translations[key] ?? key;
+      // Simple interpolation for test environment
+      let template = translations[key] ?? key;
+      if (params && typeof template === "string") {
+        Object.entries(params).forEach(([paramKey, value]) => {
+          template = template.replace(new RegExp(`{{${paramKey}}}`, "g"), value);
+        });
+      }
+      return template;
     },
     i18n: {
       language: "en",

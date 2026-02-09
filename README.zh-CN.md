@@ -2,6 +2,8 @@
 
 # CodeMoss
 
+> AI声明：本项目大量采用AI生成代码，非佬务六，不标榜原创，我就是个缝合产物
+
 <img width="120" alt="Image" src="./icon.png" />
 
 **English** · [简体中文](./README.zh-CN.md)

@@ -149,13 +149,22 @@ export function useResizablePanels() {
       resizeRef.current = null;
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
+      document.body.style.webkitUserSelect = "";
+    }
+
+    function handleSelectStart(event: Event) {
+      if (resizeRef.current) {
+        event.preventDefault();
+      }
     }
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
+    document.addEventListener("selectstart", handleSelectStart);
     return () => {
       window.removeEventListener("mousemove", handleMouseMove);
       window.removeEventListener("mouseup", handleMouseUp);
+      document.removeEventListener("selectstart", handleSelectStart);
     };
   }, []);
 
@@ -170,6 +179,7 @@ export function useResizablePanels() {
       };
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     },
     [planPanelHeight, sidebarWidth],
   );
@@ -185,6 +195,7 @@ export function useResizablePanels() {
       };
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     },
     [planPanelHeight, rightPanelWidth],
   );
@@ -200,6 +211,7 @@ export function useResizablePanels() {
       };
       document.body.style.cursor = "row-resize";
       document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     },
     [planPanelHeight, rightPanelWidth],
   );
@@ -215,6 +227,7 @@ export function useResizablePanels() {
       };
       document.body.style.cursor = "row-resize";
       document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     },
     [rightPanelWidth, terminalPanelHeight],
   );
@@ -230,6 +243,7 @@ export function useResizablePanels() {
       };
       document.body.style.cursor = "row-resize";
       document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     },
     [debugPanelHeight, rightPanelWidth],
   );
@@ -245,6 +259,7 @@ export function useResizablePanels() {
       };
       document.body.style.cursor = "col-resize";
       document.body.style.userSelect = "none";
+      document.body.style.webkitUserSelect = "none";
     },
     [kanbanConversationWidth],
   );

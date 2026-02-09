@@ -81,6 +81,7 @@ const baseProps = {
   onWorkspaceDrop: vi.fn(),
   appMode: "chat" as const,
   onAppModeChange: vi.fn(),
+  onOpenMemory: vi.fn(),
 };
 
 describe("Sidebar", () => {

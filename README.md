@@ -2,6 +2,8 @@
 
 # CodeMoss
 
+> AI statement: This project extensively uses AI generated code, not Laowu Six, and does not claim originality. I am just a stitched product
+
 <img width="120" alt="Image" src="./icon.png" />
 
 **English** · [简体中文](./README.zh-CN.md)

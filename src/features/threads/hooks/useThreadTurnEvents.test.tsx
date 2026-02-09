@@ -23,6 +23,7 @@ vi.mock("../utils/threadNormalize", () => ({
 
 type SetupOverrides = {
   pendingInterrupts?: string[];
+  interruptedThreads?: string[];
 };
 
 const makeOptions = (overrides: SetupOverrides = {}) => {
@@ -42,6 +43,9 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const pendingInterruptsRef = {
     current: new Set(overrides.pendingInterrupts ?? []),
   };
+  const interruptedThreadsRef = {
+    current: new Set(overrides.interruptedThreads ?? []),
+  };
 
   const { result } = renderHook(() =>
     useThreadTurnEvents({
@@ -53,6 +57,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       markReviewing,
       setActiveTurnId,
       pendingInterruptsRef,
+      interruptedThreadsRef,
       pushThreadErrorMessage,
       safeMessageActivity,
       recordThreadActivity,
@@ -78,6 +83,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     renameAutoTitlePendingKey,
     renameThreadTitleMapping,
     pendingInterruptsRef,
+    interruptedThreadsRef,
   };
 };
 
@@ -389,7 +395,7 @@ describe("useThreadTurnEvents", () => {
     expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
     expect(pushThreadErrorMessage).toHaveBeenCalledWith(
       "thread-1",
-      "Turn failed: boom",
+      "会话失败：boom",
     );
     expect(safeMessageActivity).toHaveBeenCalled();
   });
@@ -431,5 +437,57 @@ describe("useThreadTurnEvents", () => {
     expect(safeMessageActivity).toHaveBeenCalled();
 
     nowSpy.mockRestore();
+  });
+
+  it("suppresses error message for user-interrupted threads", () => {
+    const {
+      result,
+      dispatch,
+      markProcessing,
+      markReviewing,
+      setActiveTurnId,
+      pushThreadErrorMessage,
+      safeMessageActivity,
+      interruptedThreadsRef,
+    } = makeOptions({ interruptedThreads: ["thread-1"] });
+
+    act(() => {
+      result.current.onTurnError("ws-1", "thread-1", "turn-1", {
+        message: "Session stopped.",
+        willRetry: false,
+      });
+    });
+
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "ensureThread",
+      workspaceId: "ws-1",
+      threadId: "thread-1",
+      engine: "codex",
+    });
+    expect(dispatch).toHaveBeenCalledWith({
+      type: "finalizePendingToolStatuses",
+      threadId: "thread-1",
+      status: "failed",
+    });
+    expect(markProcessing).toHaveBeenCalledWith("thread-1", false);
+    expect(markReviewing).toHaveBeenCalledWith("thread-1", false);
+    expect(setActiveTurnId).toHaveBeenCalledWith("thread-1", null);
+    // Error message should NOT be shown for interrupted threads
+    expect(pushThreadErrorMessage).not.toHaveBeenCalled();
+    expect(safeMessageActivity).toHaveBeenCalled();
+    // Interrupted flag should be cleared
+    expect(interruptedThreadsRef.current.has("thread-1")).toBe(false);
+  });
+
+  it("clears interrupted thread flag on turn completed", () => {
+    const { result, interruptedThreadsRef } = makeOptions({
+      interruptedThreads: ["thread-1"],
+    });
+
+    act(() => {
+      result.current.onTurnCompleted("ws-1", "thread-1", "turn-1");
+    });
+
+    expect(interruptedThreadsRef.current.has("thread-1")).toBe(false);
   });
 });

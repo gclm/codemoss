@@ -94,7 +94,7 @@ export const SearchToolGroupBlock = memo(function SearchToolGroupBlock({
       >
         <div className="task-title-section">
           <span className="codicon codicon-search tool-title-icon" />
-          <span className="tool-title-text">{hasGlob ? t("tools.searchMatch") : t("tools.search")}</span>
+          <span className="tool-title-text">{hasGlob ? t("tools.batchSearchMatch") : t("tools.batchSearch")}</span>
           <span className="tool-title-summary" style={{
             color: 'var(--text-secondary)',
             marginLeft: '4px',

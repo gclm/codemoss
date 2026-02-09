@@ -28,7 +28,7 @@ export function useGitPanelController({
   prDiffsLoading: boolean;
   prDiffsError: string | null;
 }) {
-  const [centerMode, setCenterMode] = useState<"chat" | "diff" | "editor">("chat");
+  const [centerMode, setCenterMode] = useState<"chat" | "diff" | "editor" | "memory">("chat");
   const [editorFilePath, setEditorFilePath] = useState<string | null>(null);
   const [selectedDiffPath, setSelectedDiffPath] = useState<string | null>(null);
   const [diffScrollRequestId, setDiffScrollRequestId] = useState(0);

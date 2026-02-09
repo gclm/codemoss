@@ -88,7 +88,7 @@ export const ReadToolGroupBlock = memo(function ReadToolGroupBlock({
       >
         <div className="task-title-section" style={{ overflow: 'hidden' }}>
           <span className="codicon codicon-file-code tool-title-icon" />
-          <span className="tool-title-text" style={{ flexShrink: 0 }}>{t("tools.readFile")}</span>
+          <span className="tool-title-text" style={{ flexShrink: 0 }}>{t("tools.batchReadFile")}</span>
           <span className="tool-title-summary" style={{
             color: 'var(--text-secondary)',
             marginLeft: '4px',

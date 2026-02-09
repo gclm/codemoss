@@ -12,7 +12,7 @@ type AppLayoutProps = {
   showGitDetail: boolean;
   activeTab: "projects" | "codex" | "git" | "log";
   tabletTab: "codex" | "git" | "log";
-  centerMode: "chat" | "diff" | "editor";
+  centerMode: "chat" | "diff" | "editor" | "memory";
   hasActivePlan: boolean;
   activeWorkspace: boolean;
   sidebarNode: ReactNode;

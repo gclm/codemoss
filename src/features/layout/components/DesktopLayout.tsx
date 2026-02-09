@@ -1,5 +1,6 @@
 import { useEffect, useRef, type MouseEvent, type ReactNode } from "react";
 import { MainTopbar } from "../../app/components/MainTopbar";
+import { MemoryPanel } from "./MemoryPanel";
 
 type DesktopLayoutProps = {
   sidebarNode: ReactNode;
@@ -12,7 +13,7 @@ type DesktopLayoutProps = {
   showKanban: boolean;
   kanbanNode: ReactNode;
   topbarLeftNode: ReactNode;
-  centerMode: "chat" | "diff" | "editor";
+  centerMode: "chat" | "diff" | "editor" | "memory";
   messagesNode: ReactNode;
   gitDiffViewerNode: ReactNode;
   fileViewPanelNode: ReactNode;
@@ -55,6 +56,7 @@ export function DesktopLayout({
   const diffLayerRef = useRef<HTMLDivElement | null>(null);
   const chatLayerRef = useRef<HTMLDivElement | null>(null);
   const editorLayerRef = useRef<HTMLDivElement | null>(null);
+  const memoryLayerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const diffLayer = diffLayerRef.current;
@@ -95,6 +97,8 @@ export function DesktopLayout({
     );
   }
 
+  const isMemoryMode = centerMode === "memory";
+
   return (
     <>
       {sidebarNode}
@@ -107,60 +111,74 @@ export function DesktopLayout({
       />
 
       <section className="main">
-        {updateToastNode}
         {errorToastsNode}
-        {showHome && homeNode}
 
-        {showWorkspace && (
+        {isMemoryMode && (
+          <div
+            ref={memoryLayerRef}
+            style={{ position: "absolute", inset: 0, zIndex: 10 }}
+          >
+            <MemoryPanel />
+          </div>
+        )}
+
+        {!isMemoryMode && (
           <>
-            <MainTopbar leftNode={topbarLeftNode} />
-            {approvalToastsNode}
-            <div className="content">
-              <div
-                className={`content-layer ${centerMode === "diff" ? "is-active" : "is-hidden"}`}
-                aria-hidden={centerMode !== "diff"}
-                ref={diffLayerRef}
-              >
-                {gitDiffViewerNode}
-              </div>
-              <div
-                className={`content-layer ${centerMode === "editor" ? "is-active" : "is-hidden"}`}
-                aria-hidden={centerMode !== "editor"}
-                ref={editorLayerRef}
-              >
-                {fileViewPanelNode}
-              </div>
-              <div
-                className={`content-layer ${centerMode === "chat" ? "is-active" : "is-hidden"}`}
-                aria-hidden={centerMode !== "chat"}
-                ref={chatLayerRef}
-              >
-                {messagesNode}
-              </div>
-            </div>
+            {updateToastNode}
+            {showHome && homeNode}
 
-            <div
-              className="right-panel-resizer"
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize right panel"
-              onMouseDown={onRightPanelResizeStart}
-            />
-            <div className={`right-panel ${hasActivePlan ? "" : "plan-collapsed"}`}>
-              <div className="right-panel-top">{gitDiffPanelNode}</div>
-              <div
-                className="right-panel-divider"
-                role="separator"
-                aria-orientation="horizontal"
-                aria-label="Resize plan panel"
-                onMouseDown={onPlanPanelResizeStart}
-              />
-              <div className="right-panel-bottom">{planPanelNode}</div>
-            </div>
+            {showWorkspace && (
+              <>
+                <MainTopbar leftNode={topbarLeftNode} />
+                {approvalToastsNode}
+                <div className="content">
+                  <div
+                    className={`content-layer ${centerMode === "diff" ? "is-active" : "is-hidden"}`}
+                    aria-hidden={centerMode !== "diff"}
+                    ref={diffLayerRef}
+                  >
+                    {gitDiffViewerNode}
+                  </div>
+                  <div
+                    className={`content-layer ${centerMode === "editor" ? "is-active" : "is-hidden"}`}
+                    aria-hidden={centerMode !== "editor"}
+                    ref={editorLayerRef}
+                  >
+                    {fileViewPanelNode}
+                  </div>
+                  <div
+                    className={`content-layer ${centerMode === "chat" ? "is-active" : "is-hidden"}`}
+                    aria-hidden={centerMode !== "chat"}
+                    ref={chatLayerRef}
+                  >
+                    {messagesNode}
+                  </div>
+                </div>
 
-            {composerNode}
-            {terminalDockNode}
-            {debugPanelNode}
+                <div
+                  className="right-panel-resizer"
+                  role="separator"
+                  aria-orientation="vertical"
+                  aria-label="Resize right panel"
+                  onMouseDown={onRightPanelResizeStart}
+                />
+                <div className={`right-panel ${hasActivePlan ? "" : "plan-collapsed"}`}>
+                  <div className="right-panel-top">{gitDiffPanelNode}</div>
+                  <div
+                    className="right-panel-divider"
+                    role="separator"
+                    aria-orientation="horizontal"
+                    aria-label="Resize plan panel"
+                    onMouseDown={onPlanPanelResizeStart}
+                  />
+                  <div className="right-panel-bottom">{planPanelNode}</div>
+                </div>
+
+                {composerNode}
+                {terminalDockNode}
+                {debugPanelNode}
+              </>
+            )}
           </>
         )}
       </section>

@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import type { Dispatch, MutableRefObject } from "react";
 import * as Sentry from "@sentry/react";
+import { useTranslation } from "react-i18next";
 import type {
   AccessMode,
   RateLimitSnapshot,
@@ -49,6 +50,7 @@ type UseThreadMessagingOptions = {
   activeTurnIdByThread: ThreadState["activeTurnIdByThread"];
   rateLimitsByWorkspace: Record<string, RateLimitSnapshot | null>;
   pendingInterruptsRef: MutableRefObject<Set<string>>;
+  interruptedThreadsRef: MutableRefObject<Set<string>>;
   dispatch: Dispatch<ThreadAction>;
   getCustomName: (workspaceId: string, threadId: string) => string | undefined;
   getThreadEngine: (workspaceId: string, threadId: string) => "claude" | "codex" | undefined;
@@ -98,6 +100,7 @@ export function useThreadMessaging({
   activeTurnIdByThread,
   rateLimitsByWorkspace,
   pendingInterruptsRef,
+  interruptedThreadsRef,
   dispatch,
   getCustomName,
   getThreadEngine,
@@ -116,6 +119,7 @@ export function useThreadMessaging({
   startThreadForWorkspace,
   autoNameThread,
 }: UseThreadMessagingOptions) {
+  const { t } = useTranslation();
   const sendMessageToThread = useCallback(
     async (
       workspace: WorkspaceInfo,
@@ -323,7 +327,7 @@ export function useThreadMessaging({
           if (rpcError) {
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
-            pushThreadErrorMessage(threadId, `Turn failed: ${rpcError}`);
+            pushThreadErrorMessage(threadId, t("threads.turnFailedWithMessage", { message: rpcError }));
             safeMessageActivity();
             return;
           }
@@ -338,7 +342,7 @@ export function useThreadMessaging({
           if (!turnId) {
             markProcessing(threadId, false);
             setActiveTurnId(threadId, null);
-            pushThreadErrorMessage(threadId, "Turn failed to start.");
+            pushThreadErrorMessage(threadId, t("threads.turnFailedToStart"));
             safeMessageActivity();
             return;
           }
@@ -396,7 +400,7 @@ export function useThreadMessaging({
         if (rpcError) {
           markProcessing(threadId, false);
           setActiveTurnId(threadId, null);
-          pushThreadErrorMessage(threadId, `Turn failed to start: ${rpcError}`);
+          pushThreadErrorMessage(threadId, t("threads.turnFailedToStartWithMessage", { message: rpcError }));
           safeMessageActivity();
           return;
         }
@@ -408,7 +412,7 @@ export function useThreadMessaging({
         if (!turnId) {
           markProcessing(threadId, false);
           setActiveTurnId(threadId, null);
-          pushThreadErrorMessage(threadId, "Turn failed to start.");
+          pushThreadErrorMessage(threadId, t("threads.turnFailedToStart"));
           safeMessageActivity();
           return;
         }
@@ -576,12 +580,14 @@ export function useThreadMessaging({
     }
     const activeTurnId = activeTurnIdByThread[activeThreadId] ?? null;
     const turnId = activeTurnId ?? "pending";
+    // Mark this thread as interrupted so late-arriving delta events are ignored
+    interruptedThreadsRef.current.add(activeThreadId);
     markProcessing(activeThreadId, false);
     setActiveTurnId(activeThreadId, null);
     dispatch({
       type: "addAssistantMessage",
       threadId: activeThreadId,
-      text: "Session stopped.",
+      text: t("threads.sessionStopped"),
     });
     if (!activeTurnId) {
       pendingInterruptsRef.current.add(activeThreadId);
@@ -644,6 +650,7 @@ export function useThreadMessaging({
     activeTurnIdByThread,
     activeWorkspace,
     dispatch,
+    interruptedThreadsRef,
     markProcessing,
     onDebug,
     pendingInterruptsRef,

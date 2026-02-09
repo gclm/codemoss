@@ -24,6 +24,9 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
   const applyCollabThreadLinks = vi.fn();
   const getCustomName =
     overrides.getCustomName ?? vi.fn(() => undefined);
+  const interruptedThreadsRef = {
+    current: new Set<string>(),
+  };
 
   const { result } = renderHook(() =>
     useThreadItemEvents({
@@ -35,6 +38,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
       safeMessageActivity,
       recordThreadActivity,
       applyCollabThreadLinks,
+      interruptedThreadsRef,
     }),
   );
 
@@ -47,6 +51,7 @@ const makeOptions = (overrides: SetupOverrides = {}) => {
     recordThreadActivity,
     applyCollabThreadLinks,
     getCustomName,
+    interruptedThreadsRef,
   };
 };
 
@@ -211,5 +216,22 @@ describe("useThreadItemEvents", () => {
       threadId: "thread-1",
       itemId: "reasoning-1",
     });
+  });
+
+  it("skips agent message deltas for interrupted threads", () => {
+    const { result, dispatch, markProcessing, interruptedThreadsRef } = makeOptions();
+    interruptedThreadsRef.current.add("thread-1");
+
+    act(() => {
+      result.current.onAgentMessageDelta({
+        workspaceId: "ws-1",
+        threadId: "thread-1",
+        itemId: "assistant-1",
+        delta: "late arriving text",
+      });
+    });
+
+    expect(dispatch).not.toHaveBeenCalled();
+    expect(markProcessing).not.toHaveBeenCalled();
   });
 });

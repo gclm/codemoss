@@ -51,8 +51,8 @@ const zh = {
   // 侧边栏
   sidebar: {
     projects: "工作区",
-    mcpMarket: "MCP 市场",
-    skillsMarket: "Skills 市场",
+    mcpSkillsMarket: "MCP & Skills 市场",
+    longTermMemory: "长期记忆",
     pluginMarket: "插件市场",
     comingSoon: "即将推出",
     comingSoonMessage: "功能开发中，敬请期待",
@@ -959,6 +959,11 @@ const zh = {
     loading: "加载中...",
     searchOlder: "搜索更早的...",
     loadOlder: "加载更早的...",
+    sessionStopped: "会话已停止。",
+    turnFailed: "会话失败。",
+    turnFailedWithMessage: "会话失败：{{message}}",
+    turnFailedToStart: "会话启动失败。",
+    turnFailedToStartWithMessage: "会话启动失败：{{message}}",
   },
 
   // 工作区
@@ -1368,6 +1373,10 @@ const zh = {
     webRequest: "网络请求",
     batchRun: "批量运行",
     searchMatch: "搜索/匹配",
+    batchReadFile: "批量读取文件",
+    batchSearch: "批量搜索",
+    batchSearchMatch: "批量搜索/匹配",
+    batchEditFile: "批量编辑文件",
     path: "路径",
     lineRange: "第 {{start}}-{{end}} 行",
     failedCount: "{{count}} 个失败",
@@ -1381,6 +1390,16 @@ const zh = {
     used: "已使用",
     remaining: "剩余",
     unlimited: "无限制",
+  },
+  memory: {
+    checking: "正在连接长期记忆服务…",
+    offlineTitle: "请先安装长期记忆库",
+    offlineDesc: "长期记忆采用开源仓库 claude-mem\n按照以下步骤安装后即可使用",
+    offlineStepsTitle: "在终端中启动新的 Claude Code 会话并输入以下命令：",
+    offlineStep1: "/plugin marketplace add thedotmack/claude-mem",
+    offlineStep2: "/plugin install claude-mem",
+    offlineStep3: "重启终端 Claude Code",
+    offlineStep4: "重启 CodeMoss 即可",
   },
 };
 

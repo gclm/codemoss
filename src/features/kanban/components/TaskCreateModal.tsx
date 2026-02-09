@@ -7,6 +7,7 @@ import { pickImageFiles, generateThreadTitle } from "../../../services/tauri";
 import { RichTextInput } from "../../../components/common/RichTextInput";
 import { useInlineHistoryCompletion } from "../../composer/hooks/useInlineHistoryCompletion";
 import { recordHistory as recordInputHistory } from "../../composer/hooks/useInputHistoryStore";
+import { loadTaskDraft, saveTaskDraft, clearTaskDraft } from "../utils/kanbanStorage";
 
 type CreateTaskInput = {
   workspaceId: string;
@@ -85,9 +86,18 @@ export function TaskCreateModal({
 
   useEffect(() => {
     if (isOpen) {
-      setTitle("");
-      setDescription("");
-      setImages([]);
+      const draft = loadTaskDraft(panelId);
+      if (draft && (draft.title || draft.description)) {
+        setTitle(draft.title);
+        setDescription(draft.description);
+        setEngineType(draft.engineType as EngineType);
+        setModelId(draft.modelId);
+        setImages(draft.images);
+      } else {
+        setTitle("");
+        setDescription("");
+        setImages([]);
+      }
       setAutoStart(defaultStatus !== "todo");
       inlineCompletion.clear();
       if (availableEngines.length > 0 && !availableEngines.find((e) => e.engineType === engineType)) {
@@ -116,6 +126,7 @@ export function TaskCreateModal({
       recordInputHistory(trimmedDesc);
     }
     inlineCompletion.clear();
+    clearTaskDraft(panelId);
     onSubmit({
       workspaceId,
       panelId,
@@ -191,17 +202,24 @@ export function TaskCreateModal({
     [inlineCompletion],
   );
 
+  const handleCancel = () => {
+    if (title.trim() || description.trim()) {
+      saveTaskDraft(panelId, { title, description, engineType, modelId, images });
+    } else {
+      clearTaskDraft(panelId);
+    }
+    inlineCompletion.clear();
+    onCancel();
+  };
+
   if (!isOpen) return null;
 
   return (
-    <div className="kanban-modal-overlay" onClick={onCancel}>
-      <div
-        className="kanban-modal kanban-task-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <div className="kanban-modal-overlay">
+      <div className="kanban-modal kanban-task-modal">
         <div className="kanban-modal-header">
           <h2>{t("kanban.task.createTitle")}</h2>
-          <button className="kanban-icon-btn" onClick={onCancel}>
+          <button className="kanban-icon-btn" onClick={handleCancel}>
             <X size={18} />
           </button>
         </div>

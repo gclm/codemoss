@@ -177,6 +177,7 @@ type LayoutNodesOptions = {
   onWorkspaceDrop: (event: DragEvent<HTMLElement>) => void;
   appMode: AppMode;
   onAppModeChange: (mode: AppMode) => void;
+  onOpenMemory: () => void;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;
@@ -217,7 +218,7 @@ type LayoutNodesOptions = {
   onSaveLaunchScript: () => void;
   launchScriptsState?: WorkspaceLaunchScriptsState;
   mainHeaderActionsNode?: ReactNode;
-  centerMode: "chat" | "diff" | "editor";
+  centerMode: "chat" | "diff" | "editor" | "memory";
   editorFilePath: string | null;
   onOpenFile: (path: string) => void;
   onExitEditor: () => void;
@@ -530,6 +531,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       onWorkspaceDrop={options.onWorkspaceDrop}
       appMode={options.appMode}
       onAppModeChange={options.onAppModeChange}
+      onOpenMemory={options.onOpenMemory}
       showTerminalButton={options.showTerminalButton}
       isTerminalOpen={options.terminalOpen}
       onToggleTerminal={options.onToggleTerminal}
