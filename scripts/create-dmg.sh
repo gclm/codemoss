@@ -116,7 +116,10 @@ APPLESCRIPT
 
 cleanup() {
   if [ -n "$MOUNT_DIR" ]; then
-    hdiutil detach "$MOUNT_DIR" -quiet 2>/dev/null || hdiutil detach "$MOUNT_DIR" -force -quiet 2>/dev/null || true
+    local detach_target="${DEVICE_NODE:-$MOUNT_DIR}"
+    lsof +D "$MOUNT_DIR" 2>/dev/null | awk 'NR>1{print $2}' | sort -u | xargs kill -9 2>/dev/null || true
+    sleep 1
+    hdiutil detach "$detach_target" -quiet 2>/dev/null || hdiutil detach "$detach_target" -force -quiet 2>/dev/null || true
   fi
 
   if [ -n "$TEMP_DMG" ] && [ -f "$TEMP_DMG" ]; then
@@ -154,6 +157,7 @@ hdiutil create   -volname "$VOLUME_NAME"   -ov   -size "${DMG_SIZE_KB}k"   -fs H
 echo "Mounting and configuring layout..."
 MOUNT_OUTPUT=$(hdiutil attach -readwrite -noverify -nobrowse "$TEMP_DMG")
 MOUNT_DIR=$(printf '%s\n' "$MOUNT_OUTPUT" | awk -F'	' '/\/Volumes\// { print $NF; exit }')
+DEVICE_NODE=$(printf '%s\n' "$MOUNT_OUTPUT" | awk '/^\/dev\/disk/ { print $1; exit }')
 
 if [ -z "$MOUNT_DIR" ]; then
   echo "Error: Failed to mount DMG"
@@ -167,6 +171,10 @@ if [ ! -w "$MOUNT_DIR" ]; then
 fi
 
 DISK_NAME="$(basename "$MOUNT_DIR")"
+
+# Prevent Spotlight from indexing the temporary volume (avoids busy-volume in CI)
+mdutil -i off "$MOUNT_DIR" 2>/dev/null || true
+mdutil -d "$MOUNT_DIR" 2>/dev/null || true
 
 echo "Configuring Finder window layout via AppleScript..."
 if ! osascript <<APPLESCRIPT
@@ -200,29 +208,39 @@ fi
 
 # Close Finder windows referencing the volume to prevent busy-volume issues
 osascript -e "tell application \"Finder\" to close every window" 2>/dev/null || true
-sleep 1
+sleep 2
 
 chmod -Rf go-w "$MOUNT_DIR" 2>/dev/null || true
 sync
 
 echo "Finalizing DMG..."
 
-# Detach with retry - CI runners may have Finder holding the volume
-for attempt in 1 2 3 4 5; do
-  if hdiutil detach "$MOUNT_DIR" 2>/dev/null; then
+# Kill any processes still referencing the volume (Spotlight, Finder, etc.)
+lsof +D "$MOUNT_DIR" 2>/dev/null | awk 'NR>1{print $2}' | sort -u | xargs kill 2>/dev/null || true
+sleep 1
+
+# Detach with retry - prefer device node over mount path for reliability
+DETACH_TARGET="${DEVICE_NODE:-$MOUNT_DIR}"
+DETACHED=false
+for attempt in 1 2 3 4 5 6 7; do
+  if hdiutil detach "$DETACH_TARGET" 2>/dev/null; then
+    DETACHED=true
     break
   fi
   echo "Warning: detach attempt $attempt failed, retrying..."
-  sleep 2
-  if [ "$attempt" -eq 5 ]; then
-    echo "Force-detaching volume..."
-    hdiutil detach "$MOUNT_DIR" -force || true
-    sleep 1
-  fi
+  # Kill processes again on each retry
+  lsof +D "$MOUNT_DIR" 2>/dev/null | awk 'NR>1{print $2}' | sort -u | xargs kill -9 2>/dev/null || true
+  sleep 3
 done
+
+if [ "$DETACHED" = false ]; then
+  echo "Force-detaching volume..."
+  hdiutil detach "$DETACH_TARGET" -force 2>/dev/null || true
+  sleep 5
+fi
 MOUNT_DIR=""
 
-sleep 1
+sleep 2
 hdiutil convert "$TEMP_DMG" -format UDZO -o "$OUTPUT_DMG"
 
 rm -f "$TEMP_DMG"
