@@ -264,6 +264,7 @@ const en = {
     sidebarShortcuts: "Shortcuts",
     sidebarOpenIn: "Open in",
     sidebarGit: "Git",
+    sidebarVendors: "Vendors",
     sidebarCodex: "Codex",
     sidebarExperimental: "Experimental",
 
@@ -467,6 +468,53 @@ const en = {
     // Git section
     gitTitle: "Git",
     gitDescription: "Manage how diffs are loaded in the Git sidebar.",
+
+    // Vendor management
+    vendorsTitle: "Vendor Management",
+    vendorsDescription: "Manage API vendor configurations for Claude and Codex.",
+    vendor: {
+      allProviders: "All Providers",
+      allCodexProviders: "All Codex Providers",
+      add: "Add",
+      edit: "Edit",
+      delete: "Delete",
+      enable: "Enable",
+      inUse: "In Use",
+      cancel: "Cancel",
+      optional: "optional",
+      customModels: "custom models",
+      emptyState: "No Claude providers yet. Click \"Add\" above to create one.",
+      emptyCodexState: "No Codex providers yet. Click \"Add\" above to create one.",
+      dialog: {
+        addTitle: "Add Claude Provider",
+        editTitle: "Edit Claude Provider",
+        providerName: "Provider Name",
+        providerNamePlaceholder: "e.g. My Proxy Service",
+        remark: "Remark",
+        remarkPlaceholder: "Provider description or note",
+        apiKey: "API Key",
+        apiUrl: "API URL",
+        modelMapping: "Model Mapping",
+        jsonConfig: "JSON Config",
+        formatJson: "Format",
+        jsonError: "Invalid JSON format",
+        confirmAdd: "Add",
+        saveChanges: "Save",
+      },
+      codexDialog: {
+        addTitle: "Add Codex Provider",
+        editTitle: "Edit Codex Provider",
+        namePlaceholder: "e.g. My Codex Proxy",
+        configHint: "Configure Codex CLI connection parameters",
+        authHint: "Authentication keys in JSON format",
+        customModels: "Custom Models",
+      },
+      deleteConfirm: {
+        title: "Confirm Delete",
+        message: "Are you sure you want to delete provider \"{{name}}\"? This cannot be undone.",
+        confirm: "Delete",
+      },
+    },
 
     // Codex section
     codexTitle: "Codex",
@@ -821,6 +869,7 @@ const en = {
   // About
   about: {
     version: "Version",
+    tagline: "Next-gen VibeCoding, why bother with an IDE",
     checkForUpdates: "Check for Updates",
     releaseNotes: "Release Notes",
     reportIssue: "Report Issue",

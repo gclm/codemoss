@@ -264,6 +264,7 @@ const zh = {
     sidebarShortcuts: "快捷键",
     sidebarOpenIn: "打开方式",
     sidebarGit: "Git",
+    sidebarVendors: "供应商管理",
     sidebarCodex: "Codex",
     sidebarExperimental: "实验性功能",
 
@@ -467,6 +468,53 @@ const zh = {
     // Git 部分
     gitTitle: "Git",
     gitDescription: "管理 Git 侧边栏中差异的加载方式。",
+
+    // 供应商管理
+    vendorsTitle: "供应商管理",
+    vendorsDescription: "管理 Claude 和 Codex 的 API 供应商配置。",
+    vendor: {
+      allProviders: "所有供应商",
+      allCodexProviders: "所有 Codex 供应商",
+      add: "添加",
+      edit: "编辑",
+      delete: "删除",
+      enable: "启用",
+      inUse: "使用中",
+      cancel: "取消",
+      optional: "可选",
+      customModels: "个自定义模型",
+      emptyState: "暂无 Claude 供应商，点击上方「添加」创建一个。",
+      emptyCodexState: "暂无 Codex 供应商，点击上方「添加」创建一个。",
+      dialog: {
+        addTitle: "添加 Claude 供应商",
+        editTitle: "编辑 Claude 供应商",
+        providerName: "供应商名称",
+        providerNamePlaceholder: "例如: 我的代理服务",
+        remark: "备注",
+        remarkPlaceholder: "供应商说明或备注",
+        apiKey: "API Key",
+        apiUrl: "API URL",
+        modelMapping: "模型映射",
+        jsonConfig: "JSON 配置",
+        formatJson: "格式化",
+        jsonError: "JSON 格式无效",
+        confirmAdd: "添加",
+        saveChanges: "保存",
+      },
+      codexDialog: {
+        addTitle: "添加 Codex 供应商",
+        editTitle: "编辑 Codex 供应商",
+        namePlaceholder: "例如: 我的 Codex 代理",
+        configHint: "配置 Codex CLI 连接参数",
+        authHint: "认证密钥的 JSON 格式配置",
+        customModels: "自定义模型",
+      },
+      deleteConfirm: {
+        title: "确认删除",
+        message: "确定要删除供应商「{{name}}」吗？此操作不可撤销。",
+        confirm: "删除",
+      },
+    },
 
     // Codex 部分
     codexTitle: "Codex",
@@ -821,6 +869,7 @@ const zh = {
   // 关于
   about: {
     version: "版本",
+    tagline: "下一代 VibeCoding，何必用 IDE",
     checkForUpdates: "检查更新",
     releaseNotes: "发布说明",
     reportIssue: "报告问题",
