@@ -189,10 +189,11 @@
   background: transparent;
   color: var(--text-faint);
   font-size: 12px;
-  padding: 2px 6px;
+  padding: 2px 0;
+  width: 24px;
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -1290,7 +1291,6 @@
   border-radius: 12px;
   background: color-mix(in srgb, var(--surface-card) 74%, transparent);
   padding: 8px;
-  overflow: hidden;
   min-width: 0;
 }
 
@@ -1300,8 +1300,7 @@
   gap: 6px;
   min-height: 30px;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: visible;
   scrollbar-width: thin;
 }
 
@@ -1338,6 +1337,15 @@
   margin-top: 8px;
   display: grid;
   gap: 8px;
+}
+
+.composer-management-panel.is-compact .composer-management-header {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+
+.composer-management-panel.is-compact .composer-management-toggle {
+  margin-left: 0;
 }
 
 .composer-management-collapsed-row {
@@ -1633,6 +1641,11 @@
   background: color-mix(in srgb, var(--surface-elevated) 96%, #0b1020);
   backdrop-filter: blur(8px);
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.4);
+}
+
+.composer-context-menu-panel--portal {
+  position: fixed;
+  bottom: auto;
 }
 
 .composer-context-backdrop {

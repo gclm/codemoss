@@ -1548,11 +1548,12 @@ function MainApp() {
     return kanbanPanels
       .filter((panel) => composerKanbanWorkspaceIds.includes(panel.workspaceId))
       .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .sort((a, b) => b.createdAt - a.createdAt || a.sortOrder - b.sortOrder)
       .map((panel) => ({
         id: panel.id,
         name: panel.name,
         workspaceId: panel.workspaceId,
+        createdAt: panel.createdAt,
       }));
   }, [composerKanbanWorkspaceIds, kanbanPanels]);
 

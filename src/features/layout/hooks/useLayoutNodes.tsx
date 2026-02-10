@@ -422,7 +422,12 @@ type LayoutNodesOptions = {
   onDismissDictationHint: () => void;
   showComposer: boolean;
   composerSendLabel?: string;
-  composerLinkedKanbanPanels: { id: string; name: string; workspaceId: string }[];
+  composerLinkedKanbanPanels: {
+    id: string;
+    name: string;
+    workspaceId: string;
+    createdAt?: number;
+  }[];
   selectedComposerKanbanPanelId: string | null;
   composerKanbanContextMode: "new" | "inherit";
   onSelectComposerKanbanPanel: (panelId: string | null) => void;
