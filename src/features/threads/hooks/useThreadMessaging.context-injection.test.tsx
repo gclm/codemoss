@@ -77,6 +77,7 @@ function buildHook(engine: "claude" | "codex") {
       activeTurnIdByThread: {},
       rateLimitsByWorkspace: {},
       pendingInterruptsRef: { current: new Set<string>() },
+      interruptedThreadsRef: { current: new Set<string>() },
       dispatch: vi.fn(),
       getCustomName: vi.fn(),
       getThreadEngine: vi.fn(),
