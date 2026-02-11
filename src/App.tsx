@@ -33,6 +33,7 @@ import "./styles/compact-tablet.css";
 import "./styles/tool-blocks.css";
 import "./styles/status-panel.css";
 import "./styles/kanban.css";
+import "./styles/search-palette.css";
 import successSoundUrl from "./assets/success-notification.mp3";
 import errorSoundUrl from "./assets/error-notification.mp3";
 import { AppLayout } from "./features/app/components/AppLayout";
@@ -95,6 +96,7 @@ import { useWorkspaceCycling } from "./features/app/hooks/useWorkspaceCycling";
 import { useThreadRows } from "./features/app/hooks/useThreadRows";
 import { useInterruptShortcut } from "./features/app/hooks/useInterruptShortcut";
 import { useArchiveShortcut } from "./features/app/hooks/useArchiveShortcut";
+import { useGlobalSearchShortcut } from "./features/app/hooks/useGlobalSearchShortcut";
 import { useLiquidGlassEffect } from "./features/app/hooks/useLiquidGlassEffect";
 import { useCopyThread } from "./features/threads/hooks/useCopyThread";
 import { useTerminalController } from "./features/terminal/hooks/useTerminalController";
@@ -111,7 +113,13 @@ import { useWorkspaceLaunchScripts } from "./features/app/hooks/useWorkspaceLaun
 import { useWorktreeSetupScript } from "./features/app/hooks/useWorktreeSetupScript";
 import { useGitCommitController } from "./features/app/hooks/useGitCommitController";
 import { WorkspaceHome } from "./features/workspaces/components/WorkspaceHome";
-import { pickWorkspacePath } from "./services/tauri";
+import { SearchPalette } from "./features/search/components/SearchPalette";
+import { useUnifiedSearch } from "./features/search/hooks/useUnifiedSearch";
+import { loadHistoryWithImportance } from "./features/composer/hooks/useInputHistoryStore";
+import { recordSearchResultOpen } from "./features/search/ranking/recencyStore";
+import type { SearchContentFilter, SearchResult, SearchScope } from "./features/search/types";
+import { toggleSearchContentFilters } from "./features/search/utils/contentFilters";
+import { getWorkspaceFiles, pickWorkspacePath } from "./services/tauri";
 import type {
   AccessMode,
   ComposerEditorSettings,
@@ -223,6 +231,10 @@ function MainApp() {
     () => new Map(workspaces.map((workspace) => [workspace.id, workspace])),
     [workspaces],
   );
+  const workspacesByPath = useMemo(
+    () => new Map(workspaces.map((workspace) => [workspace.path, workspace])),
+    [workspaces],
+  );
   const {
     sidebarWidth,
     rightPanelWidth,
@@ -272,6 +284,15 @@ function MainApp() {
     openSettings,
     closeSettings,
   } = useSettingsModalState();
+  const [isSearchPaletteOpen, setIsSearchPaletteOpen] = useState(false);
+  const [searchScope, setSearchScope] = useState<SearchScope>("active-workspace");
+  const [searchContentFilters, setSearchContentFilters] =
+    useState<SearchContentFilter[]>(["all"]);
+  const [searchPaletteQuery, setSearchPaletteQuery] = useState("");
+  const [searchPaletteSelectedIndex, setSearchPaletteSelectedIndex] = useState(0);
+  const [globalSearchFilesByWorkspace, setGlobalSearchFilesByWorkspace] = useState<
+    Record<string, string[]>
+  >({});
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const {
@@ -443,7 +464,7 @@ function MainApp() {
     updateTask: kanbanUpdateTask,
     deleteTask: kanbanDeleteTask,
     reorderTask: kanbanReorderTask,
-  } = useKanbanStore();
+  } = useKanbanStore(workspaces);
 
   const [engineSelectedModelIdByType, setEngineSelectedModelIdByType] =
     useState<Partial<Record<EngineType, string | null>>>({});
@@ -721,6 +742,7 @@ function MainApp() {
     setActiveThreadId,
     activeThreadId,
     activeItems,
+    threadItemsByThread,
     approvals,
     userInputRequests,
     threadsByWorkspace,
@@ -1173,6 +1195,132 @@ function MainApp() {
     textareaRef: composerInputRef,
   });
 
+  const activeWorkspaceKanbanTasks = useMemo(
+    () => {
+      const activePath = activeWorkspace?.path;
+      return activePath ? kanbanTasks.filter((task) => task.workspaceId === activePath) : [];
+    },
+    [activeWorkspace, kanbanTasks],
+  );
+  const activeWorkspaceThreads = useMemo(
+    () => (activeWorkspaceId ? threadsByWorkspace[activeWorkspaceId] ?? [] : []),
+    [activeWorkspaceId, threadsByWorkspace],
+  );
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      return;
+    }
+    setGlobalSearchFilesByWorkspace((prev) => {
+      const nextFiles = files;
+      const prevFiles = prev[activeWorkspaceId];
+      if (prevFiles === nextFiles) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [activeWorkspaceId]: nextFiles,
+      };
+    });
+  }, [activeWorkspaceId, files]);
+
+  useEffect(() => {
+    if (!isSearchPaletteOpen || searchScope !== "global") {
+      return;
+    }
+    const targetWorkspaceIds = workspaces.map((workspace) => workspace.id);
+    const uncachedWorkspaceIds = targetWorkspaceIds.filter(
+      (workspaceId) => !(workspaceId in globalSearchFilesByWorkspace),
+    );
+    if (uncachedWorkspaceIds.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    void Promise.all(
+      uncachedWorkspaceIds.map(async (workspaceId) => {
+        try {
+          const response = await getWorkspaceFiles(workspaceId);
+          return [
+            workspaceId,
+            Array.isArray(response.files) ? response.files : ([] as string[]),
+          ] as const;
+        } catch {
+          return [workspaceId, [] as string[]] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (cancelled || entries.length === 0) {
+        return;
+      }
+      setGlobalSearchFilesByWorkspace((prev) => {
+        const next = { ...prev };
+        for (const [workspaceId, workspaceFiles] of entries) {
+          next[workspaceId] = workspaceFiles;
+        }
+        return next;
+      });
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [globalSearchFilesByWorkspace, isSearchPaletteOpen, searchScope, workspaces]);
+
+  const workspaceSearchSources = useMemo(() => {
+    if (searchScope === "global") {
+      return workspaces.map((workspace) => ({
+        workspaceId: workspace.id,
+        workspaceName: workspace.name,
+        files: globalSearchFilesByWorkspace[workspace.id] ?? [],
+        threads: threadsByWorkspace[workspace.id] ?? [],
+      }));
+    }
+    if (!activeWorkspaceId || !activeWorkspace) {
+      return [];
+    }
+    return [
+      {
+        workspaceId: activeWorkspaceId,
+        workspaceName: activeWorkspace.name,
+        files,
+        threads: activeWorkspaceThreads,
+      },
+    ];
+  }, [
+    activeWorkspace,
+    activeWorkspaceId,
+    activeWorkspaceThreads,
+    files,
+    globalSearchFilesByWorkspace,
+    searchScope,
+    threadsByWorkspace,
+    workspaces,
+  ]);
+
+  const scopedKanbanTasks = useMemo(
+    () => (searchScope === "global" ? kanbanTasks : activeWorkspaceKanbanTasks),
+    [activeWorkspaceKanbanTasks, kanbanTasks, searchScope],
+  );
+  const historySearchItems = useMemo(
+    () => (isSearchPaletteOpen ? loadHistoryWithImportance() : []),
+    [isSearchPaletteOpen],
+  );
+  const workspaceNameByPath = useMemo(
+    () => new Map(workspaces.map((w) => [w.path, w.name])),
+    [workspaces],
+  );
+  const searchResults = useUnifiedSearch({
+    query: searchPaletteQuery,
+    contentFilters: searchContentFilters,
+    workspaceSources: workspaceSearchSources,
+    kanbanTasks: scopedKanbanTasks,
+    threadItemsByThread,
+    historyItems: historySearchItems,
+    skills,
+    commands,
+    activeWorkspaceId,
+    workspaceNameByPath,
+  });
+
   const RECENT_THREAD_LIMIT = 8;
   const { recentThreads } = useMemo(() => {
     if (!activeWorkspaceId) {
@@ -1482,6 +1630,153 @@ function MainApp() {
     removeThread,
   ]);
 
+  useGlobalSearchShortcut({
+    isEnabled: true,
+    shortcut: appSettings.toggleGlobalSearchShortcut,
+    onTrigger: () => {
+      setIsSearchPaletteOpen((prev) => {
+        const next = !prev;
+        if (!next) {
+          setSearchPaletteQuery("");
+          setSearchPaletteSelectedIndex(0);
+        }
+        return next;
+      });
+    },
+  });
+
+  useEffect(() => {
+    if (!isSearchPaletteOpen) {
+      return;
+    }
+    setSearchPaletteSelectedIndex(0);
+  }, [isSearchPaletteOpen, searchPaletteQuery]);
+
+  const handleSearchPaletteMoveSelection = useCallback(
+    (direction: "up" | "down") => {
+      if (!searchResults.length) {
+        return;
+      }
+      setSearchPaletteSelectedIndex((prev) => {
+        if (direction === "down") {
+          return (prev + 1) % searchResults.length;
+        }
+        return (prev - 1 + searchResults.length) % searchResults.length;
+      });
+    },
+    [searchResults.length],
+  );
+
+  const handleToggleSearchContentFilter = useCallback((nextFilter: SearchContentFilter) => {
+    setSearchContentFilters((prev) => toggleSearchContentFilters(prev, nextFilter));
+    setSearchPaletteSelectedIndex(0);
+  }, []);
+
+  const handleSelectSearchResult = useCallback(
+    (result: SearchResult) => {
+      switch (result.kind) {
+        case "file":
+          if (result.filePath) {
+            handleOpenFile(result.filePath);
+          }
+          break;
+        case "thread":
+          if (result.workspaceId && result.threadId) {
+            exitDiffView();
+            setSelectedPullRequest(null);
+            setSelectedCommitSha(null);
+            setDiffSource("local");
+            selectWorkspace(result.workspaceId);
+            setActiveThreadId(result.threadId, result.workspaceId);
+          }
+          break;
+        case "kanban":
+          if (result.taskId) {
+            const task = kanbanTasks.find((entry) => entry.id === result.taskId);
+            if (task) {
+              const taskWs = workspacesByPath.get(task.workspaceId);
+              setAppMode("kanban");
+              setSelectedKanbanTaskId(task.id);
+              if (taskWs) selectWorkspace(taskWs.id);
+              setKanbanViewState({
+                view: "board",
+                workspaceId: task.workspaceId,
+                panelId: task.panelId,
+              });
+            }
+          }
+          break;
+        case "history":
+          if (result.historyText) {
+            handleDraftChange(result.historyText);
+            if (isCompact) {
+              setActiveTab("codex");
+            }
+          }
+          break;
+        case "message":
+          if (result.workspaceId && result.threadId) {
+            exitDiffView();
+            setSelectedPullRequest(null);
+            setSelectedCommitSha(null);
+            setDiffSource("local");
+            selectWorkspace(result.workspaceId);
+            setActiveThreadId(result.threadId, result.workspaceId);
+            if (isCompact) {
+              setActiveTab("codex");
+            }
+          }
+          break;
+        case "skill":
+          if (result.skillName) {
+            const slashToken = `/${result.skillName}`;
+            const nextDraft = activeDraft.trim()
+              ? `${activeDraft.trim()} ${slashToken} `
+              : `${slashToken} `;
+            handleDraftChange(nextDraft);
+            if (isCompact) {
+              setActiveTab("codex");
+            }
+          }
+          break;
+        case "command":
+          if (result.commandName) {
+            const slashToken = `/${result.commandName}`;
+            const nextDraft = activeDraft.trim()
+              ? `${activeDraft.trim()} ${slashToken} `
+              : `${slashToken} `;
+            handleDraftChange(nextDraft);
+            if (isCompact) {
+              setActiveTab("codex");
+            }
+          }
+          break;
+        default:
+          break;
+      }
+      recordSearchResultOpen(result.id);
+      setIsSearchPaletteOpen(false);
+      setSearchPaletteQuery("");
+      setSearchPaletteSelectedIndex(0);
+    },
+    [
+      exitDiffView,
+      handleDraftChange,
+      handleOpenFile,
+      activeDraft,
+      isCompact,
+      kanbanTasks,
+      selectWorkspace,
+      setActiveTab,
+      setAppMode,
+      setDiffSource,
+      setActiveThreadId,
+      setKanbanViewState,
+      setSelectedCommitSha,
+      setSelectedPullRequest,
+    ],
+  );
+
   useInterruptShortcut({
     isEnabled: canInterrupt,
     shortcut: appSettings.interruptShortcut,
@@ -1548,11 +1843,12 @@ function MainApp() {
     return kanbanPanels
       .filter((panel) => composerKanbanWorkspaceIds.includes(panel.workspaceId))
       .slice()
-      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .sort((a, b) => b.createdAt - a.createdAt || a.sortOrder - b.sortOrder)
       .map((panel) => ({
         id: panel.id,
         name: panel.name,
         workspaceId: panel.workspaceId,
+        createdAt: panel.createdAt,
       }));
   }, [composerKanbanWorkspaceIds, kanbanPanels]);
 
@@ -1847,11 +2143,11 @@ function MainApp() {
   const handleOpenTaskConversation = useCallback(
     async (task: KanbanTask) => {
       setSelectedKanbanTaskId(task.id);
-      const workspace = workspacesById.get(task.workspaceId);
+      const workspace = workspacesByPath.get(task.workspaceId);
       if (!workspace) return;
 
       await connectWorkspace(workspace);
-      selectWorkspace(task.workspaceId);
+      selectWorkspace(workspace.id);
 
       const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
       await setActiveEngine(engine);
@@ -1876,7 +2172,7 @@ function MainApp() {
           resolvedThreadId.startsWith("claude-pending-") &&
           !threadStatusById[resolvedThreadId]
         ) {
-          const threads = threadsByWorkspace[task.workspaceId] ?? [];
+          const threads = threadsByWorkspace[workspace.id] ?? [];
           const otherTaskThreadIds = new Set(
             kanbanTasks
               .filter((t) => t.id !== task.id && t.threadId && !t.threadId.startsWith("claude-pending-"))
@@ -1890,17 +2186,17 @@ function MainApp() {
             kanbanUpdateTask(task.id, { threadId: resolvedThreadId });
           }
         }
-        setActiveThreadId(resolvedThreadId, task.workspaceId);
+        setActiveThreadId(resolvedThreadId, workspace.id);
       } else {
-        const threadId = await startThreadForWorkspace(task.workspaceId, { engine });
+        const threadId = await startThreadForWorkspace(workspace.id, { engine });
         if (threadId) {
           kanbanUpdateTask(task.id, { threadId });
-          setActiveThreadId(threadId, task.workspaceId);
+          setActiveThreadId(threadId, workspace.id);
         }
       }
     },
     [
-      workspacesById,
+      workspacesByPath,
       connectWorkspace,
       selectWorkspace,
       setActiveThreadId,
@@ -1926,11 +2222,11 @@ function MainApp() {
       if (input.autoStart) {
         // Auto-execute: create thread and send first message (without opening conversation panel)
         const executeAutoStart = async () => {
-          const workspace = workspacesById.get(task.workspaceId);
+          const workspace = workspacesByPath.get(task.workspaceId);
           if (!workspace) return;
 
           await connectWorkspace(workspace);
-          selectWorkspace(task.workspaceId);
+          selectWorkspace(workspace.id);
 
           const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
           await setActiveEngine(engine);
@@ -1947,10 +2243,10 @@ function MainApp() {
             }
           }
 
-          const threadId = await startThreadForWorkspace(task.workspaceId, { engine });
+          const threadId = await startThreadForWorkspace(workspace.id, { engine });
           if (!threadId) return;
           kanbanUpdateTask(task.id, { threadId });
-          setActiveThreadId(threadId, task.workspaceId);
+          setActiveThreadId(threadId, workspace.id);
 
           // Send task description (or title if no description) as first message
           const firstMessage = task.description?.trim() || task.title;
@@ -1969,7 +2265,7 @@ function MainApp() {
     [
       kanbanCreateTask,
       kanbanUpdateTask,
-      workspacesById,
+      workspacesByPath,
       connectWorkspace,
       selectWorkspace,
       activeEngine,
@@ -1991,7 +2287,8 @@ function MainApp() {
       // If the old ID still exists in the thread system, no rename happened yet
       if (threadStatusById[task.threadId] !== undefined) continue;
       // Thread was renamed — find the new ID from threadsByWorkspace
-      const threads = threadsByWorkspace[task.workspaceId] ?? [];
+      const wsId = workspacesByPath.get(task.workspaceId)?.id;
+      const threads = wsId ? (threadsByWorkspace[wsId] ?? []) : [];
       const otherTaskThreadIds = new Set(
         kanbanTasks
           .filter((t) => t.id !== task.id && t.threadId && !t.threadId.startsWith("claude-pending-"))
@@ -2019,12 +2316,13 @@ function MainApp() {
   // Sync activeWorkspaceId when kanban navigates to a workspace
   useEffect(() => {
     if (appMode === "kanban" && "workspaceId" in kanbanViewState) {
-      const kanbanWsId = kanbanViewState.workspaceId;
-      if (kanbanWsId && kanbanWsId !== activeWorkspaceId) {
-        setActiveWorkspaceId(kanbanWsId);
+      const kanbanWsPath = kanbanViewState.workspaceId;
+      const ws = kanbanWsPath ? workspacesByPath.get(kanbanWsPath) : null;
+      if (ws && ws.id !== activeWorkspaceId) {
+        setActiveWorkspaceId(ws.id);
       }
     }
-  }, [appMode, kanbanViewState, activeWorkspaceId, setActiveWorkspaceId]);
+  }, [appMode, kanbanViewState, activeWorkspaceId, setActiveWorkspaceId, workspacesByPath]);
 
   // Compute which kanban tasks are currently processing (AI responding)
   const taskProcessingMap = useMemo(() => {
@@ -2071,11 +2369,11 @@ function MainApp() {
     (task: KanbanTask) => {
       // Auto-execute regardless of existing threadId — reuse thread if present
       const executeTask = async () => {
-        const workspace = workspacesById.get(task.workspaceId);
+        const workspace = workspacesByPath.get(task.workspaceId);
         if (!workspace) return;
 
         await connectWorkspace(workspace);
-        selectWorkspace(task.workspaceId);
+        selectWorkspace(workspace.id);
 
         const engine = (task.engineType ?? activeEngine) as "claude" | "codex";
         await setActiveEngine(engine);
@@ -2097,7 +2395,7 @@ function MainApp() {
           // activate: false — this is background execution, must not switch
           // the global active thread (which would hijack any conversation
           // panel the user is currently viewing).
-          threadId = await startThreadForWorkspace(task.workspaceId, {
+          threadId = await startThreadForWorkspace(workspace.id, {
             engine,
             activate: false,
           });
@@ -2116,7 +2414,7 @@ function MainApp() {
       });
     },
     [
-      workspacesById,
+      workspacesByPath,
       connectWorkspace,
       selectWorkspace,
       activeEngine,
@@ -2224,6 +2522,16 @@ function MainApp() {
     onCycleWorkspace: handleCycleWorkspace,
     onToggleDebug: handleDebugClick,
     onToggleTerminal: handleToggleTerminal,
+    onToggleGlobalSearch: () => {
+      setIsSearchPaletteOpen((prev) => {
+        const next = !prev;
+        if (!next) {
+          setSearchPaletteQuery("");
+          setSearchPaletteSelectedIndex(0);
+        }
+        return next;
+      });
+    },
     sidebarCollapsed,
     rightPanelCollapsed,
     onExpandSidebar: expandSidebar,
@@ -2841,6 +3149,30 @@ function MainApp() {
         onSidebarResizeStart={onSidebarResizeStart}
         onRightPanelResizeStart={onRightPanelResizeStart}
         onPlanPanelResizeStart={onPlanPanelResizeStart}
+      />
+      <SearchPalette
+        isOpen={isSearchPaletteOpen}
+        scope={searchScope}
+        contentFilters={searchContentFilters}
+        workspaceName={activeWorkspace?.name ?? null}
+        query={searchPaletteQuery}
+        results={searchResults}
+        selectedIndex={searchPaletteSelectedIndex}
+        onQueryChange={setSearchPaletteQuery}
+        onMoveSelection={handleSearchPaletteMoveSelection}
+        onSelect={(result) => {
+          void handleSelectSearchResult(result);
+        }}
+        onScopeChange={(nextScope) => {
+          setSearchScope(nextScope);
+          setSearchPaletteSelectedIndex(0);
+        }}
+        onContentFilterToggle={handleToggleSearchContentFilter}
+        onClose={() => {
+          setIsSearchPaletteOpen(false);
+          setSearchPaletteQuery("");
+          setSearchPaletteSelectedIndex(0);
+        }}
       />
       <AppModals
         renamePrompt={renamePrompt}

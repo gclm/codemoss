@@ -31,6 +31,7 @@ import { useInlineHistoryCompletion } from "../hooks/useInlineHistoryCompletion"
 import { recordHistory as recordInputHistory } from "../hooks/useInputHistoryStore";
 import { ComposerInput } from "./ComposerInput";
 import { ComposerQueue } from "./ComposerQueue";
+import { ComposerContextMenuPopover } from "./ComposerContextMenuPopover";
 import { StatusPanel } from "../../status-panel/components/StatusPanel";
 import ExternalLink from "lucide-react/dist/esm/icons/external-link";
 import Check from "lucide-react/dist/esm/icons/check";
@@ -136,7 +137,12 @@ type ComposerProps = {
   onReviewPromptConfirmCommit?: () => Promise<void>;
   onReviewPromptUpdateCustomInstructions?: (value: string) => void;
   onReviewPromptConfirmCustom?: () => Promise<void>;
-  linkedKanbanPanels?: { id: string; name: string; workspaceId: string }[];
+  linkedKanbanPanels?: {
+    id: string;
+    name: string;
+    workspaceId: string;
+    createdAt?: number;
+  }[];
   selectedLinkedKanbanPanelId?: string | null;
   onSelectLinkedKanbanPanel?: (panelId: string | null) => void;
   onOpenLinkedKanbanPanel?: (panelId: string) => void;
@@ -154,6 +160,7 @@ const DEFAULT_EDITOR_SETTINGS: ComposerEditorSettings = {
 };
 
 const EMPTY_ITEMS: ConversationItem[] = [];
+const COMPOSER_COMPACT_RESERVED_GAP = 24;
 
 type PrefixOption = {
   name: string;
@@ -316,7 +323,8 @@ export function Composer({
   const { t } = useTranslation();
   const [text, setText] = useState(draftText);
   const [selectionStart, setSelectionStart] = useState<number | null>(null);
-  const [contextCollapsed, setContextCollapsed] = useState(true);
+  const [manualContextCollapsed, setManualContextCollapsed] = useState(true);
+  const [isCompactLayout, setIsCompactLayout] = useState(false);
   const [selectedSkillNames, setSelectedSkillNames] = useState<string[]>([]);
   const [selectedCommonsNames, setSelectedCommonsNames] = useState<string[]>([]);
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
@@ -324,6 +332,14 @@ export function Composer({
   const [commonsMenuOpen, setCommonsMenuOpen] = useState(false);
   const [skillSearchQuery, setSkillSearchQuery] = useState("");
   const [commonsSearchQuery, setCommonsSearchQuery] = useState("");
+  const helpMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const skillMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const commonsMenuAnchorRef = useRef<HTMLButtonElement | null>(null);
+  const managementPanelRef = useRef<HTMLDivElement | null>(null);
+  const managementHeaderRef = useRef<HTMLDivElement | null>(null);
+  const contextActionsRef = useRef<HTMLDivElement | null>(null);
+  const managementToggleRef = useRef<HTMLButtonElement | null>(null);
+  const previousCompactLayoutRef = useRef(false);
   const internalRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaRef = externalTextareaRef ?? internalRef;
   const editorSettings = editorSettingsProp ?? DEFAULT_EDITOR_SETTINGS;
@@ -345,6 +361,7 @@ export function Composer({
   const selectedCommons = commands.filter((item) =>
     selectedCommonsNames.includes(item.name),
   );
+  const contextCollapsed = manualContextCollapsed;
   const collapsedSkillPreview = selectedSkills.slice(0, 2);
   const collapsedCommonsPreview = selectedCommons.slice(0, 2);
   const collapsedKanbanPreview = (() => {
@@ -385,7 +402,7 @@ export function Composer({
   }, [draftText]);
 
   useEffect(() => {
-    setContextCollapsed(true);
+    setManualContextCollapsed(true);
   }, [historyKey]);
 
   const setComposerText = useCallback(
@@ -654,6 +671,51 @@ export function Composer({
   }, [insertText, onInsertHandled, resetHistoryNavigation, setComposerText]);
 
   useEffect(() => {
+    const panelElement = managementPanelRef.current;
+    const headerElement = managementHeaderRef.current;
+    const actionsElement = contextActionsRef.current;
+    const toggleElement = managementToggleRef.current;
+
+    const updateCompactLayout = () => {
+      const panelWidth = panelElement?.getBoundingClientRect().width ?? 0;
+      const headerWidth = headerElement?.getBoundingClientRect().width ?? panelWidth;
+      const actionsWidth = actionsElement?.scrollWidth ?? 0;
+      const toggleWidth = toggleElement?.getBoundingClientRect().width ?? 0;
+      if (headerWidth <= 0 || actionsWidth <= 0 || toggleWidth <= 0) {
+        setIsCompactLayout(false);
+        return;
+      }
+      setIsCompactLayout(
+        actionsWidth + toggleWidth + COMPOSER_COMPACT_RESERVED_GAP > headerWidth,
+      );
+    };
+
+    updateCompactLayout();
+    if (typeof ResizeObserver !== "undefined" && panelElement) {
+      const observer = new ResizeObserver(() => updateCompactLayout());
+      for (const element of [panelElement, headerElement, actionsElement, toggleElement]) {
+        if (element) {
+          observer.observe(element);
+        }
+      }
+      return () => observer.disconnect();
+    }
+
+    if (typeof window !== "undefined") {
+      window.addEventListener("resize", updateCompactLayout);
+      return () => window.removeEventListener("resize", updateCompactLayout);
+    }
+    return undefined;
+  }, []);
+
+  useEffect(() => {
+    if (isCompactLayout && !previousCompactLayoutRef.current) {
+      setManualContextCollapsed(false);
+    }
+    previousCompactLayoutRef.current = isCompactLayout;
+  }, [isCompactLayout]);
+
+  useEffect(() => {
     if (!dictationTranscript) {
       return;
     }
@@ -815,11 +877,15 @@ export function Composer({
         onDeleteQueued={onDeleteQueued}
       />
       <div className="composer-shell">
-        <div className="composer-management-panel">
-          <div className="composer-management-header">
-            <div className="composer-context-actions">
+        <div
+          ref={managementPanelRef}
+          className={`composer-management-panel${isCompactLayout ? " is-compact" : ""}`}
+        >
+          <div ref={managementHeaderRef} className="composer-management-header">
+            <div ref={contextActionsRef} className="composer-context-actions">
               <div className="composer-context-menu">
                 <button
+                  ref={helpMenuAnchorRef}
                   type="button"
                   className="composer-context-action-btn composer-context-action-btn--help"
                   onClick={() => {
@@ -834,83 +900,77 @@ export function Composer({
                     <CircleHelp size={12} />
                   </span>
                 </button>
-                {helpMenuOpen && (
-                  <>
-                    <div
-                      className="composer-context-backdrop"
-                      onClick={() => setHelpMenuOpen(false)}
-                      aria-hidden="true"
-                    />
-                    <div
-                      className="composer-context-menu-panel composer-context-menu-panel--help"
-                      role="dialog"
-                      aria-label="管理面板说明"
-                    >
-                      <div className="composer-context-menu-head">
-                        <span className="composer-context-menu-title">管理面板使用说明</span>
-                        <span className="composer-context-menu-meta">面向 Skill / Commons / 看板联动</span>
-                      </div>
-                      <div className="composer-context-help-grid">
-                        <section className="composer-context-help-section">
-                          <h4>按钮含义</h4>
-                          <ul>
-                            <li>
-                              <strong>+S</strong>：添加 Skill（专家视角），如 Review / Debug / Doc。
-                            </li>
-                            <li>
-                              <strong>+M</strong>：添加 Commons（长期规则），如项目约束、团队规范。
-                            </li>
-                            <li>
-                              <strong>S / M / K</strong>：已选 Skill / Commons / 关联看板标识。
-                            </li>
-                            <li>
-                              <strong>K link</strong>：打开对应看板页面；切换不同 K 即切换上下文来源。
-                            </li>
-                          </ul>
-                        </section>
-                        <section className="composer-context-help-section">
-                          <h4>推荐用法</h4>
-                          <ol>
-                            <li>先选 1-2 个 Skill，确定分析角度。</li>
-                            <li>再补 1-2 个 Commons，限制输出边界。</li>
-                            <li>需要结合项目状态时，再选择关联看板 (K)。</li>
-                          </ol>
-                        </section>
-                        <section className="composer-context-help-section">
-                          <h4>看板与会话模式</h4>
-                          <ul>
-                            <li>
-                              <strong>K 选中效果</strong>：被选中的看板会作为当前上下文来源，发送时优先绑定该看板。
-                            </li>
-                            <li>
-                              <strong>新会话</strong>：仅使用当前输入 + 已选 S/M/K，不继承上一次该看板会话内容。
-                            </li>
-                            <li>
-                              <strong>继承当前</strong>：继续该看板的当前会话，保留已有上下文与历史推理链路。
-                            </li>
-                            <li>
-                              <strong>选中态 icon</strong>：当前生效模式前会显示绿色勾选 icon，便于快速确认。
-                            </li>
-                          </ul>
-                        </section>
-                        <section className="composer-context-help-section composer-context-help-section--wide">
-                          <h4>发送时自动拼装（对用户透明）</h4>
-                          <pre className="composer-context-help-example">
+                <ComposerContextMenuPopover
+                  open={helpMenuOpen}
+                  anchorRef={helpMenuAnchorRef}
+                  onClose={() => setHelpMenuOpen(false)}
+                  panelClassName="composer-context-menu-panel--help"
+                  panelProps={{ role: "dialog", "aria-label": "管理面板说明" }}
+                >
+                  <div className="composer-context-menu-head">
+                    <span className="composer-context-menu-title">管理面板使用说明</span>
+                    <span className="composer-context-menu-meta">面向 Skill / Commons / 看板联动</span>
+                  </div>
+                  <div className="composer-context-help-grid">
+                    <section className="composer-context-help-section">
+                      <h4>按钮含义</h4>
+                      <ul>
+                        <li>
+                          <strong>+S</strong>：添加 Skill（专家视角），如 Review / Debug / Doc。
+                        </li>
+                        <li>
+                          <strong>+M</strong>：添加 Commons（长期规则），如项目约束、团队规范。
+                        </li>
+                        <li>
+                          <strong>S / M / K</strong>：已选 Skill / Commons / 关联看板标识。
+                        </li>
+                        <li>
+                          <strong>K link</strong>：打开对应看板页面；切换不同 K 即切换上下文来源。
+                        </li>
+                      </ul>
+                    </section>
+                    <section className="composer-context-help-section">
+                      <h4>推荐用法</h4>
+                      <ol>
+                        <li>先选 1-2 个 Skill，确定分析角度。</li>
+                        <li>再补 1-2 个 Commons，限制输出边界。</li>
+                        <li>需要结合项目状态时，再选择关联看板 (K)。</li>
+                      </ol>
+                    </section>
+                    <section className="composer-context-help-section">
+                      <h4>看板与会话模式</h4>
+                      <ul>
+                        <li>
+                          <strong>K 选中效果</strong>：被选中的看板会作为当前上下文来源，发送时优先绑定该看板。
+                        </li>
+                        <li>
+                          <strong>新会话</strong>：仅使用当前输入 + 已选 S/M/K，不继承上一次该看板会话内容。
+                        </li>
+                        <li>
+                          <strong>继承当前</strong>：继续该看板的当前会话，保留已有上下文与历史推理链路。
+                        </li>
+                        <li>
+                          <strong>选中态 icon</strong>：当前生效模式前会显示绿色勾选 icon，便于快速确认。
+                        </li>
+                      </ul>
+                    </section>
+                    <section className="composer-context-help-section composer-context-help-section--wide">
+                      <h4>发送时自动拼装（对用户透明）</h4>
+                      <pre className="composer-context-help-example">
 {`/skill-name /commons-name 你的自然语言问题
 示例：/tr-zh-en-jp /AI-REACH:Auto 我要睡觉`}
-                          </pre>
-                        </section>
-                      </div>
-                      <div className="composer-context-menu-foot">
-                        目标：你只写问题，系统负责结构化 Prompt 组装。
-                      </div>
-                    </div>
-                  </>
-                )}
+                      </pre>
+                    </section>
+                  </div>
+                  <div className="composer-context-menu-foot">
+                    目标：你只写问题，系统负责结构化 Prompt 组装。
+                  </div>
+                </ComposerContextMenuPopover>
               </div>
 
               <div className="composer-context-menu">
                 <button
+                  ref={skillMenuAnchorRef}
                   type="button"
                   className="composer-context-action-btn composer-context-action-btn--skill"
                   onClick={() => {
@@ -926,57 +986,46 @@ export function Composer({
                   </span>
                   <span>S+</span>
                 </button>
-                {skillMenuOpen && (
-                  <>
-                    <div
-                      className="composer-context-backdrop"
-                      onClick={() => setSkillMenuOpen(false)}
-                      aria-hidden="true"
-                    />
-                    <div
-                      className={`composer-context-menu-panel${
-                        skillSearchQuery.trim() ? " is-searching" : ""
-                      }`}
-                    >
-                      <div className="composer-context-menu-sticky">
-                        <div className="composer-context-menu-head">
-                          <span className="composer-context-menu-title">选择 Skill</span>
-                          <span className="composer-context-menu-meta">
-                            {filteredSkillOptions.length} 个可选
-                          </span>
-                        </div>
-                        <div className="composer-context-menu-search">
-                          <input
-                            type="text"
-                            className="composer-context-menu-search-input"
-                            value={skillSearchQuery}
-                            onChange={(event) => setSkillSearchQuery(event.target.value)}
-                            placeholder="搜索 Skill（名称或描述）"
-                            aria-label="搜索 Skill"
-                          />
-                        </div>
-                      </div>
-                      <div
-                        className="composer-context-menu-grid"
-                        role="listbox"
-                        aria-label="Skill options"
-                      >
-                        {renderGroupedOptions(
-                          skillLeftColumn,
-                          skillRightColumn,
-                          handlePickSkill,
-                          "没有可选 Skill",
-                          "skill",
-                        )}
-                      </div>
-                      <div className="composer-context-menu-foot">点击一项立即添加</div>
+                <ComposerContextMenuPopover
+                  open={skillMenuOpen}
+                  anchorRef={skillMenuAnchorRef}
+                  onClose={() => setSkillMenuOpen(false)}
+                  panelClassName={skillSearchQuery.trim() ? "is-searching" : undefined}
+                >
+                  <div className="composer-context-menu-sticky">
+                    <div className="composer-context-menu-head">
+                      <span className="composer-context-menu-title">选择 Skill</span>
+                      <span className="composer-context-menu-meta">
+                        {filteredSkillOptions.length} 个可选
+                      </span>
                     </div>
-                  </>
-                )}
+                    <div className="composer-context-menu-search">
+                      <input
+                        type="text"
+                        className="composer-context-menu-search-input"
+                        value={skillSearchQuery}
+                        onChange={(event) => setSkillSearchQuery(event.target.value)}
+                        placeholder="搜索 Skill（名称或描述）"
+                        aria-label="搜索 Skill"
+                      />
+                    </div>
+                  </div>
+                  <div className="composer-context-menu-grid" role="listbox" aria-label="Skill options">
+                    {renderGroupedOptions(
+                      skillLeftColumn,
+                      skillRightColumn,
+                      handlePickSkill,
+                      "没有可选 Skill",
+                      "skill",
+                    )}
+                  </div>
+                  <div className="composer-context-menu-foot">点击一项立即添加</div>
+                </ComposerContextMenuPopover>
               </div>
 
               <div className="composer-context-menu">
                 <button
+                  ref={commonsMenuAnchorRef}
                   type="button"
                   className="composer-context-action-btn composer-context-action-btn--commons"
                   onClick={() => {
@@ -992,53 +1041,45 @@ export function Composer({
                   </span>
                   <span>M+</span>
                 </button>
-                {commonsMenuOpen && (
-                  <>
-                    <div
-                      className="composer-context-backdrop"
-                      onClick={() => setCommonsMenuOpen(false)}
-                      aria-hidden="true"
-                    />
-                    <div
-                      className={`composer-context-menu-panel${
-                        commonsSearchQuery.trim() ? " is-searching" : ""
-                      }`}
-                    >
-                      <div className="composer-context-menu-sticky">
-                        <div className="composer-context-menu-head">
-                          <span className="composer-context-menu-title">选择 Commons</span>
-                          <span className="composer-context-menu-meta">
-                            {filteredCommonsOptions.length} 个可选
-                          </span>
-                        </div>
-                        <div className="composer-context-menu-search">
-                          <input
-                            type="text"
-                            className="composer-context-menu-search-input"
-                            value={commonsSearchQuery}
-                            onChange={(event) => setCommonsSearchQuery(event.target.value)}
-                            placeholder="搜索 Commons（名称或描述）"
-                            aria-label="搜索 Commons"
-                          />
-                        </div>
-                      </div>
-                      <div
-                        className="composer-context-menu-grid"
-                        role="listbox"
-                        aria-label="Commons options"
-                      >
-                        {renderGroupedOptions(
-                          commonsLeftColumn,
-                          commonsRightColumn,
-                          handlePickCommons,
-                          "没有可选 Commons",
-                          "commons",
-                        )}
-                      </div>
-                      <div className="composer-context-menu-foot">点击一项立即添加</div>
+                <ComposerContextMenuPopover
+                  open={commonsMenuOpen}
+                  anchorRef={commonsMenuAnchorRef}
+                  onClose={() => setCommonsMenuOpen(false)}
+                  panelClassName={commonsSearchQuery.trim() ? "is-searching" : undefined}
+                >
+                  <div className="composer-context-menu-sticky">
+                    <div className="composer-context-menu-head">
+                      <span className="composer-context-menu-title">选择 Commons</span>
+                      <span className="composer-context-menu-meta">
+                        {filteredCommonsOptions.length} 个可选
+                      </span>
                     </div>
-                  </>
-                )}
+                    <div className="composer-context-menu-search">
+                      <input
+                        type="text"
+                        className="composer-context-menu-search-input"
+                        value={commonsSearchQuery}
+                        onChange={(event) => setCommonsSearchQuery(event.target.value)}
+                        placeholder="搜索 Commons（名称或描述）"
+                        aria-label="搜索 Commons"
+                      />
+                    </div>
+                  </div>
+                  <div
+                    className="composer-context-menu-grid"
+                    role="listbox"
+                    aria-label="Commons options"
+                  >
+                    {renderGroupedOptions(
+                      commonsLeftColumn,
+                      commonsRightColumn,
+                      handlePickCommons,
+                      "没有可选 Commons",
+                      "commons",
+                    )}
+                  </div>
+                  <div className="composer-context-menu-foot">点击一项立即添加</div>
+                </ComposerContextMenuPopover>
               </div>
             </div>
 
@@ -1115,9 +1156,9 @@ export function Composer({
                               type="button"
                               className="composer-kanban-strip-link"
                               onClick={() => onOpenLinkedKanbanPanel?.(panel.id)}
+                              aria-label={`${panel.name} ${t("kanban.composer.link")}`}
                             >
                               <ExternalLink size={12} />
-                              <span>{t("kanban.composer.link")}</span>
                             </button>
                           </div>
                         );
@@ -1163,9 +1204,10 @@ export function Composer({
                 </div>
               )}
             <button
+              ref={managementToggleRef}
               type="button"
               className="composer-management-toggle"
-              onClick={() => setContextCollapsed((prev) => !prev)}
+              onClick={() => setManualContextCollapsed((prev) => !prev)}
             >
               {contextCollapsed ? "▶" : "▼"} 管理面板
             </button>
@@ -1201,9 +1243,9 @@ export function Composer({
                             type="button"
                             className="composer-kanban-strip-link"
                             onClick={() => onOpenLinkedKanbanPanel?.(panel.id)}
+                            aria-label={`${panel.name} ${t("kanban.composer.link")}`}
                           >
                             <ExternalLink size={12} />
-                            <span>{t("kanban.composer.link")}</span>
                           </button>
                         </div>
                       );
