@@ -359,4 +359,36 @@ describe("useAppServerEvents", () => {
       root.unmount();
     });
   });
+
+  it("passes engine hint when thread session id is updated", async () => {
+    const handlers: Handlers = {
+      onThreadSessionIdUpdated: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-opencode",
+        message: {
+          method: "thread/started",
+          params: {
+            threadId: "opencode-pending-1",
+            sessionId: "ses_1",
+            engine: "opencode",
+          },
+        },
+      });
+    });
+
+    expect(handlers.onThreadSessionIdUpdated).toHaveBeenCalledWith(
+      "ws-opencode",
+      "opencode-pending-1",
+      "ses_1",
+      "opencode",
+    );
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
 });

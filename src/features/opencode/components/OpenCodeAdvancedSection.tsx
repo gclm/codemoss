@@ -3,11 +3,13 @@ import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
 type OpenCodeAdvancedSectionProps = {
   advancedOpen: boolean;
   onAdvancedOpenChange: (open: boolean) => void;
+  onRunQuickCommand: (command: string) => void;
 };
 
 export function OpenCodeAdvancedSection({
   advancedOpen,
   onAdvancedOpenChange,
+  onRunQuickCommand,
 }: OpenCodeAdvancedSectionProps) {
   return (
     <div className="opencode-panel-advanced">
@@ -21,8 +23,37 @@ export function OpenCodeAdvancedSection({
       </button>
       {advancedOpen && (
         <div className="opencode-advanced-content">
-          <div>Debug / Console / Heap 入口已下沉到 Advanced。</div>
-          <div>主对话区只保留核心工作流，避免噪音。</div>
+          <div>快捷命令（在当前会话执行）</div>
+          <div className="opencode-session-filters">
+            <button
+              type="button"
+              className="opencode-filter-btn"
+              onClick={() => onRunQuickCommand("/status")}
+            >
+              /status
+            </button>
+            <button
+              type="button"
+              className="opencode-filter-btn"
+              onClick={() => onRunQuickCommand("/mcp")}
+            >
+              /mcp
+            </button>
+            <button
+              type="button"
+              className="opencode-filter-btn"
+              onClick={() => onRunQuickCommand("/export")}
+            >
+              /export
+            </button>
+            <button
+              type="button"
+              className="opencode-filter-btn"
+              onClick={() => onRunQuickCommand("/share")}
+            >
+              /share
+            </button>
+          </div>
         </div>
       )}
     </div>

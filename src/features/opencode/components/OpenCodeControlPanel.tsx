@@ -24,6 +24,7 @@ type OpenCodeControlPanelProps = {
   variantOptions?: string[];
   onSelectVariant?: (variant: string | null) => void;
   onProviderStatusToneChange?: (tone: "is-ok" | "is-runtime" | "is-fail") => void;
+  onRunOpenCodeCommand?: (command: string) => void;
 };
 
 export function OpenCodeControlPanel({
@@ -43,6 +44,7 @@ export function OpenCodeControlPanel({
   variantOptions = [],
   onSelectVariant,
   onProviderStatusToneChange,
+  onRunOpenCodeCommand,
 }: OpenCodeControlPanelProps) {
   const [sessionQuery, setSessionQuery] = useState("");
   const [sessionFilter, setSessionFilter] = useState<"recent" | "favorites">("recent");
@@ -52,6 +54,7 @@ export function OpenCodeControlPanel({
     "provider",
   );
   const [authExpanded, setAuthExpanded] = useState(false);
+  const [selectedProviderId, setSelectedProviderId] = useState<string>("");
   const panelRootRef = useRef<HTMLElement | null>(null);
   const panelToggleRef = useRef<HTMLButtonElement | null>(null);
   const drawerRef = useRef<HTMLElement | null>(null);
@@ -64,6 +67,7 @@ export function OpenCodeControlPanel({
     providerHealth,
     testingProvider,
     sessions,
+    providerOptions,
     connectingProvider,
     favoriteSessionIds,
     testProvider,
@@ -118,6 +122,17 @@ export function OpenCodeControlPanel({
     });
     return filtered.slice(0, 8);
   }, [favoriteSessionIds, sessionFilter, sessionQuery, sessions]);
+
+  useEffect(() => {
+    if (!providerOptions.length) {
+      return;
+    }
+    if (selectedProviderId && providerOptions.some((item) => item.id === selectedProviderId)) {
+      return;
+    }
+    const matched = providerOptions.find((item) => item.id === providerHealth.provider);
+    setSelectedProviderId((matched ?? providerOptions[0]).id);
+  }, [providerHealth.provider, providerOptions, selectedProviderId]);
 
   const normalizeDisplayValue = (value?: string | null) => {
     const normalized = value?.trim();
@@ -184,7 +199,6 @@ export function OpenCodeControlPanel({
     return rows;
   }, [
     providerHealth.connected,
-    providerHealth.credentialCount,
     providerHealth.authenticatedProviders,
     providerHealth.matched,
     resolvedProviderValue,
@@ -545,6 +559,9 @@ export function OpenCodeControlPanel({
         providerHealth={providerHealth}
         providerStatusTone={providerStatusTone}
         providerStatusLabel={providerStatusLabel}
+        providerOptions={providerOptions}
+        selectedProviderId={selectedProviderId}
+        onSelectedProviderIdChange={setSelectedProviderId}
         showHeader={false}
         connectingProvider={connectingProvider}
         testingProvider={testingProvider}
@@ -570,6 +587,7 @@ export function OpenCodeControlPanel({
         visibleSessions={visibleSessions}
         favoriteSessionIds={favoriteSessionIds}
         onToggleFavoriteSession={toggleFavoriteSession}
+        onResumeSession={(sessionId) => onRunOpenCodeCommand?.(`/resume ${sessionId}`)}
       />
       )}
 
@@ -577,6 +595,7 @@ export function OpenCodeControlPanel({
       <OpenCodeAdvancedSection
         advancedOpen={advancedOpen}
         onAdvancedOpenChange={setAdvancedOpen}
+        onRunQuickCommand={(command) => onRunOpenCodeCommand?.(command)}
       />
       )}
             </div>

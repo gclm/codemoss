@@ -298,4 +298,56 @@ describe("useThreadMessaging", () => {
       }),
     );
   });
+
+  it("resumes explicit opencode session from /resume command", async () => {
+    const dispatch = vi.fn();
+    const refreshThread = vi.fn(async () => null);
+    const { result } = renderHook(() =>
+      useThreadMessaging({
+        activeWorkspace: workspace,
+        activeThreadId: "thread-1",
+        accessMode: "current",
+        model: null,
+        effort: null,
+        collaborationMode: null,
+        steerEnabled: false,
+        customPrompts: [],
+        activeEngine: "opencode",
+        threadStatusById: {},
+        activeTurnIdByThread: {},
+        rateLimitsByWorkspace: {},
+        pendingInterruptsRef: { current: new Set<string>() },
+        interruptedThreadsRef: { current: new Set<string>() },
+        dispatch,
+        getCustomName: () => undefined,
+        getThreadEngine: () => "opencode",
+        markProcessing: vi.fn(),
+        markReviewing: vi.fn(),
+        setActiveTurnId: vi.fn(),
+        recordThreadActivity: vi.fn(),
+        safeMessageActivity: vi.fn(),
+        pushThreadErrorMessage: vi.fn(),
+        ensureThreadForActiveWorkspace: async () => "thread-1",
+        ensureThreadForWorkspace: async () => "thread-1",
+        refreshThread,
+        forkThreadForWorkspace: async () => null,
+        updateThreadParent: vi.fn(),
+        startThreadForWorkspace: vi.fn(async () => "thread-1"),
+        autoNameThread: vi.fn(),
+        onDebug: vi.fn(),
+      }),
+    );
+
+    await act(async () => {
+      await result.current.startResume("/resume ses_from_panel");
+    });
+
+    expect(dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: "setActiveThreadId",
+        threadId: "opencode:ses_from_panel",
+      }),
+    );
+    expect(refreshThread).toHaveBeenCalledWith("ws-1", "opencode:ses_from_panel");
+  });
 });

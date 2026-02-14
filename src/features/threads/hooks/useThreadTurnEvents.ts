@@ -286,6 +286,7 @@ export function useThreadTurnEvents({
       resolvePendingAliasThread,
       safeMessageActivity,
       setActiveTurnId,
+      t,
     ],
   );
 

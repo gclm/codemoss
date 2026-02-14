@@ -254,7 +254,7 @@ export function useOpenCodeControlPanel({
         setConnectingProvider(false);
       }
     },
-    [enabled, workspaceId],
+    [enabled, refresh, workspaceId],
   );
 
   const toggleMcpGlobal = useCallback(

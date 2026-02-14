@@ -1722,6 +1722,7 @@ export function Composer({
                 setOpenCodeProviderToneReady(true);
                 setOpenCodeProviderTone(tone);
               }}
+              onRunOpenCodeCommand={(command) => onSend(command, [])}
             />
           }
         />

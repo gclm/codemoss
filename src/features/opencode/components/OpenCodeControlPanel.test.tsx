@@ -86,6 +86,7 @@ describe("OpenCodeControlPanel", () => {
   });
 
   it("opens drawer and switches tabs", () => {
+    const onRunOpenCodeCommand = vi.fn();
     render(
       <OpenCodeControlPanel
         visible
@@ -94,6 +95,7 @@ describe("OpenCodeControlPanel", () => {
         selectedModel="openai/gpt-5.3-codex"
         selectedAgent="default"
         selectedVariant="default"
+        onRunOpenCodeCommand={onRunOpenCodeCommand}
       />,
     );
 
@@ -110,7 +112,13 @@ describe("OpenCodeControlPanel", () => {
 
     fireEvent.click(screen.getByRole("tab", { name: "Advanced" }));
     fireEvent.click(screen.getByRole("button", { name: "Advanced" }));
-    expect(screen.getByText("Debug / Console / Heap 入口已下沉到 Advanced。")).toBeTruthy();
+    expect(screen.getByText("快捷命令（在当前会话执行）")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "/status" }));
+    expect(onRunOpenCodeCommand).toHaveBeenCalledWith("/status");
+
+    fireEvent.click(screen.getByRole("tab", { name: "Sessions" }));
+    fireEvent.click(screen.getAllByRole("button", { name: "恢复" })[0]);
+    expect(onRunOpenCodeCommand).toHaveBeenCalledWith("/resume ses_1234567890");
   });
 
   it("closes drawer on Escape", () => {

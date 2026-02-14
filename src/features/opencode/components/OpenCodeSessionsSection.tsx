@@ -10,6 +10,7 @@ type OpenCodeSessionsSectionProps = {
   visibleSessions: OpenCodeSessionSummary[];
   favoriteSessionIds: Record<string, true>;
   onToggleFavoriteSession: (sessionId: string) => void;
+  onResumeSession: (sessionId: string) => void;
 };
 
 export function OpenCodeSessionsSection({
@@ -20,6 +21,7 @@ export function OpenCodeSessionsSection({
   visibleSessions,
   favoriteSessionIds,
   onToggleFavoriteSession,
+  onResumeSession,
 }: OpenCodeSessionsSectionProps) {
   return (
     <div className="opencode-panel-sessions">
@@ -74,6 +76,14 @@ export function OpenCodeSessionsSection({
                 <span>{session.updatedLabel}</span>
               </div>
             </div>
+            <button
+              type="button"
+              className="opencode-provider-test"
+              onClick={() => onResumeSession(session.sessionId)}
+              title="恢复到该 OpenCode 会话"
+            >
+              恢复
+            </button>
           </div>
         ))}
       </div>

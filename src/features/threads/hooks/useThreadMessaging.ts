@@ -184,7 +184,12 @@ export function useThreadMessaging({
           threadId.startsWith("opencode-pending-")
         );
       }
-      return !threadId.startsWith("claude:") && !threadId.startsWith("opencode:");
+      return (
+        !threadId.startsWith("claude:")
+        && !threadId.startsWith("claude-pending-")
+        && !threadId.startsWith("opencode:")
+        && !threadId.startsWith("opencode-pending-")
+      );
     },
     [],
   );
@@ -598,6 +603,7 @@ export function useThreadMessaging({
       setActiveTurnId,
       autoNameThread,
       steerEnabled,
+      t,
       threadStatusById,
     ],
   );
@@ -775,7 +781,6 @@ export function useThreadMessaging({
       });
     }
   }, [
-    activeEngine,
     activeThreadId,
     activeTurnIdByThread,
     activeWorkspace,
@@ -786,6 +791,7 @@ export function useThreadMessaging({
     pendingInterruptsRef,
     resolveThreadEngine,
     setActiveTurnId,
+    t,
   ]);
 
   const startReviewTarget = useCallback(
@@ -1034,6 +1040,7 @@ export function useThreadMessaging({
       effort,
       ensureThreadForActiveWorkspace,
       model,
+      pushThreadErrorMessage,
       rateLimitsByWorkspace,
       recordThreadActivity,
       resolveThreadEngine,
@@ -1510,14 +1517,51 @@ export function useThreadMessaging({
   );
 
   const startResume = useCallback(
-    async (_text: string) => {
+    async (text: string) => {
       if (!activeWorkspace) {
         return;
       }
       if (activeThreadId && threadStatusById[activeThreadId]?.isProcessing) {
         return;
       }
-      const threadId = activeThreadId ?? (await ensureThreadForActiveWorkspace());
+      const resumeTargetRaw = text.trim().replace(/^\/resume\b/i, "").trim();
+      let threadId: string | null = null;
+      if (resumeTargetRaw.length > 0) {
+        const sessionId = resumeTargetRaw.split(/\s+/)[0] ?? "";
+        if (sessionId) {
+          const targetThreadId = sessionId.startsWith("opencode:")
+            ? sessionId
+            : `opencode:${sessionId}`;
+          const timestamp = Date.now();
+          dispatch({
+            type: "ensureThread",
+            workspaceId: activeWorkspace.id,
+            threadId: targetThreadId,
+            engine: "opencode",
+          });
+          dispatch({
+            type: "setThreadEngine",
+            workspaceId: activeWorkspace.id,
+            threadId: targetThreadId,
+            engine: "opencode",
+          });
+          dispatch({
+            type: "setThreadTimestamp",
+            workspaceId: activeWorkspace.id,
+            threadId: targetThreadId,
+            timestamp,
+          });
+          dispatch({
+            type: "setActiveThreadId",
+            workspaceId: activeWorkspace.id,
+            threadId: targetThreadId,
+          });
+          threadId = targetThreadId;
+        }
+      }
+      if (!threadId) {
+        threadId = activeThreadId ?? (await ensureThreadForActiveWorkspace());
+      }
       if (!threadId) {
         return;
       }
@@ -1527,6 +1571,7 @@ export function useThreadMessaging({
     [
       activeThreadId,
       activeWorkspace,
+      dispatch,
       ensureThreadForActiveWorkspace,
       refreshThread,
       safeMessageActivity,

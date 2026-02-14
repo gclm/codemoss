@@ -2,12 +2,15 @@ import { useState } from "react";
 import ShieldCheck from "lucide-react/dist/esm/icons/shield-check";
 import Search from "lucide-react/dist/esm/icons/search";
 import Link2 from "lucide-react/dist/esm/icons/link-2";
-import type { OpenCodeProviderHealth } from "../types";
+import type { OpenCodeProviderHealth, OpenCodeProviderOption } from "../types";
 
 type OpenCodeProviderSectionProps = {
   providerHealth: OpenCodeProviderHealth;
   providerStatusTone: "is-ok" | "is-runtime" | "is-fail";
   providerStatusLabel: string;
+  providerOptions: OpenCodeProviderOption[];
+  selectedProviderId: string;
+  onSelectedProviderIdChange: (providerId: string) => void;
   showHeader?: boolean;
   connectingProvider: boolean;
   testingProvider: boolean;
@@ -19,6 +22,9 @@ export function OpenCodeProviderSection({
   providerHealth,
   providerStatusTone,
   providerStatusLabel,
+  providerOptions,
+  selectedProviderId,
+  onSelectedProviderIdChange,
   showHeader = true,
   connectingProvider,
   testingProvider,
@@ -52,12 +58,28 @@ export function OpenCodeProviderSection({
       <div className="opencode-provider-connect">
         <div className="opencode-provider-select-wrap">
           <span>Connect a provider</span>
+          <select
+            className="opencode-panel-select"
+            value={selectedProviderId}
+            onChange={(event) => onSelectedProviderIdChange(event.target.value)}
+          >
+            {providerOptions.length === 0 && (
+              <option value={selectedProviderId}>
+                {selectedProviderId || "auto-detect"}
+              </option>
+            )}
+            {providerOptions.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.recommended ? `${item.label} (recommended)` : item.label}
+              </option>
+            ))}
+          </select>
         </div>
         <button
           type="button"
           className="opencode-provider-connect-btn"
           onClick={async () => {
-            await onConnectProvider(null);
+            await onConnectProvider(selectedProviderId || null);
             setProviderCheckFeedback("已拉起 Provider 认证流程，请在终端完成认证。");
           }}
           disabled={connectingProvider}
@@ -71,7 +93,7 @@ export function OpenCodeProviderSection({
           className="opencode-provider-test"
           onClick={async () => {
             try {
-              const result = await onTestProvider(null);
+              const result = await onTestProvider(selectedProviderId || null);
               if (!result) {
                 setProviderCheckFeedback("未执行检查（工作区不可用）");
                 return;

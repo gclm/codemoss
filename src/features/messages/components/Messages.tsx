@@ -749,9 +749,6 @@ export const Messages = memo(function Messages({
       if (item.kind === "message" && item.role === "assistant") {
         return false;
       }
-      if (item.kind !== "message") {
-        return false;
-      }
     }
     return true;
   }, [isThinking, items]);
