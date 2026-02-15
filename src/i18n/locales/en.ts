@@ -281,7 +281,7 @@ const en = {
     // Notification
     notificationSounds: "Notification Sounds",
     systemNotification: "System Notifications",
-    systemNotificationDesc: "Send system-level notifications when sessions complete, even when the window is not in focus.",
+    systemNotificationDesc: "Send system-level notifications when sessions complete.",
     testSound: "Test",
 
     // Language
@@ -1531,8 +1531,6 @@ const en = {
 
   threadCompletion: {
     title: "Session Completed",
-    open: "Open Thread",
-    dismiss: "Dismiss",
     project: "Project",
     session: "Session",
   },

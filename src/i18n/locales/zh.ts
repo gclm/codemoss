@@ -280,7 +280,7 @@ const zh = {
     // 通知
     notificationSounds: "通知声音",
     systemNotification: "系统通知",
-    systemNotificationDesc: "会话完成时发送系统级通知，即使窗口不在前台也能收到提醒。",
+    systemNotificationDesc: "会话完成时发送系统级通知。",
     testSound: "测试",
 
     // 语言
@@ -1530,8 +1530,6 @@ const zh = {
 
   threadCompletion: {
     title: "会话执行完成",
-    open: "打开会话",
-    dismiss: "关闭",
     project: "项目",
     session: "会话",
   },
