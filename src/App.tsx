@@ -32,13 +32,21 @@ import "./styles/compact-phone.css";
 import "./styles/compact-tablet.css";
 import "./styles/tool-blocks.css";
 import "./styles/status-panel.css";
+import "./styles/opencode-panel.css";
 import "./styles/kanban.css";
 import "./styles/search-palette.css";
+import "./styles/panel-lock.css";
+import "./styles/thread-completion-bubble.css";
 import successSoundUrl from "./assets/success-notification.mp3";
 import errorSoundUrl from "./assets/error-notification.mp3";
 import { AppLayout } from "./features/app/components/AppLayout";
 import { AppModals } from "./features/app/components/AppModals";
 import { MainHeaderActions } from "./features/app/components/MainHeaderActions";
+import { LockScreenOverlay } from "./features/app/components/LockScreenOverlay";
+import {
+  ThreadCompletionBubble,
+  type ThreadCompletionNotice,
+} from "./features/notifications/components/ThreadCompletionBubble";
 import { useLayoutNodes } from "./features/layout/hooks/useLayoutNodes";
 import { useWorkspaceDropZone } from "./features/workspaces/hooks/useWorkspaceDropZone";
 import { useThreads } from "./features/threads/hooks/useThreads";
@@ -119,11 +127,19 @@ import { loadHistoryWithImportance } from "./features/composer/hooks/useInputHis
 import { recordSearchResultOpen } from "./features/search/ranking/recencyStore";
 import type { SearchContentFilter, SearchResult, SearchScope } from "./features/search/types";
 import { toggleSearchContentFilters } from "./features/search/utils/contentFilters";
-import { getWorkspaceFiles, pickWorkspacePath } from "./services/tauri";
+import {
+  getOpenCodeAgentsList,
+  getWorkspaceFiles,
+  pickWorkspacePath,
+  readPanelLockPasswordFile,
+  writePanelLockPasswordFile,
+} from "./services/tauri";
 import type {
   AccessMode,
+  ConversationItem,
   ComposerEditorSettings,
   EngineType,
+  OpenCodeAgentOption,
   WorkspaceInfo,
 } from "./types";
 import { writeClientStoreValue } from "./services/clientStorage";
@@ -149,6 +165,82 @@ const GitHubPanelData = lazy(() =>
     default: module.GitHubPanelData,
   })),
 );
+
+const PANEL_LOCK_DEFAULT_PASSWORD = "123456";
+const LOCK_LIVE_SESSION_LIMIT = 12;
+const LOCK_LIVE_PREVIEW_MAX = 180;
+const THREAD_COMPLETION_NOTICE_LIMIT = 3;
+const OPENCODE_VARIANT_OPTIONS = ["minimal", "low", "medium", "high", "max"];
+
+type ThreadCompletionTracker = {
+  isProcessing: boolean;
+  lastDurationMs: number | null;
+  lastAgentTimestamp: number;
+};
+
+function normalizeLockLiveSnippet(text: string, maxLength = LOCK_LIVE_PREVIEW_MAX) {
+  const compact = text.replace(/\s+/g, " ").trim();
+  if (!compact) {
+    return "";
+  }
+  if (compact.length <= maxLength) {
+    return compact;
+  }
+  return `${compact.slice(0, Math.max(0, maxLength - 1))}...`;
+}
+
+function resolveLockLivePreview(
+  items: ConversationItem[] | undefined,
+  fallbackText: string | undefined,
+) {
+  const threadItems = items ?? [];
+  for (let index = threadItems.length - 1; index >= 0; index -= 1) {
+    const item = threadItems[index];
+    if (item.kind === "message") {
+      const value = normalizeLockLiveSnippet(item.text);
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    if (item.kind === "reasoning") {
+      const value = normalizeLockLiveSnippet(item.summary || item.content);
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    if (item.kind === "tool") {
+      const value = normalizeLockLiveSnippet(item.output || item.detail || item.title);
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    if (item.kind === "review") {
+      const value = normalizeLockLiveSnippet(item.text);
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    if (item.kind === "diff") {
+      const value = normalizeLockLiveSnippet(item.title);
+      if (value) {
+        return value;
+      }
+      continue;
+    }
+    if (item.kind === "explore") {
+      const latest = item.entries[item.entries.length - 1];
+      const value = normalizeLockLiveSnippet(latest?.detail || latest?.label || "");
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return normalizeLockLiveSnippet(fallbackText || "");
+}
 
 
 function MainApp() {
@@ -293,6 +385,12 @@ function MainApp() {
   const [globalSearchFilesByWorkspace, setGlobalSearchFilesByWorkspace] = useState<
     Record<string, string[]>
   >({});
+  const [isPanelLocked, setIsPanelLocked] = useState(false);
+  const [threadCompletionNotices, setThreadCompletionNotices] = useState<ThreadCompletionNotice[]>(
+    [],
+  );
+  const completionTrackerReadyRef = useRef(false);
+  const completionTrackerBySessionRef = useRef<Record<string, ThreadCompletionTracker>>({});
   const composerInputRef = useRef<HTMLTextAreaElement | null>(null);
 
   const {
@@ -465,6 +563,58 @@ function MainApp() {
     engineModelsAsOptions,
     engineStatuses,
   } = useEngineController({ activeWorkspace, onDebug: addDebugEntry });
+  const [openCodeAgents, setOpenCodeAgents] = useState<OpenCodeAgentOption[]>([]);
+  const [openCodeAgentByThreadId, setOpenCodeAgentByThreadId] = useState<Record<string, string | null>>({});
+  const [openCodeVariantByThreadId, setOpenCodeVariantByThreadId] = useState<
+    Record<string, string | null>
+  >({});
+  const [openCodeDefaultAgentByWorkspace, setOpenCodeDefaultAgentByWorkspace] = useState<
+    Record<string, string | null>
+  >({});
+  const [openCodeDefaultVariantByWorkspace, setOpenCodeDefaultVariantByWorkspace] = useState<
+    Record<string, string | null>
+  >({});
+
+  useEffect(() => {
+    if (activeEngine !== "opencode") {
+      return;
+    }
+    let cancelled = false;
+    void getOpenCodeAgentsList()
+      .then((response) => {
+        if (cancelled) {
+          return;
+        }
+        const payload = Array.isArray(response)
+          ? response
+          : Array.isArray((response as any)?.result)
+            ? (response as any).result
+            : [];
+        const normalized = payload
+          .map((item: any) => ({
+            id: String(item.id ?? "").trim(),
+            description: item.description ? String(item.description) : undefined,
+            isPrimary: Boolean(item.isPrimary ?? item.is_primary),
+          }))
+          .filter((item: OpenCodeAgentOption) => item.id.length > 0)
+          .sort((a: OpenCodeAgentOption, b: OpenCodeAgentOption) =>
+            a.id.localeCompare(b.id),
+          );
+        setOpenCodeAgents(normalized);
+      })
+      .catch((error) => {
+        addDebugEntry({
+          id: `${Date.now()}-opencode-agents-list-error`,
+          timestamp: Date.now(),
+          source: "error",
+          label: "opencode/agents list error",
+          payload: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [activeEngine, addDebugEntry]);
 
   // --- Kanban mode ---
   const [appMode, setAppMode] = useState<import("./types").AppMode>("chat");
@@ -615,7 +765,7 @@ function MainApp() {
     getWorkspacePromptsDir,
     getGlobalPromptsDir,
   } = useCustomPrompts({ activeWorkspace, onDebug: addDebugEntry });
-  const { commands } = useCustomCommands({ onDebug: addDebugEntry });
+  const { commands } = useCustomCommands({ onDebug: addDebugEntry, activeEngine });
   const { files, directories, gitignoredFiles, isLoading: isFilesLoading, refreshFiles } = useWorkspaceFiles({
     activeWorkspace,
     onDebug: addDebugEntry,
@@ -654,6 +804,30 @@ function MainApp() {
 
   const resolvedModel = effectiveSelectedModel?.model ?? null;
   const resolvedEffort = effectiveReasoningSupported ? selectedEffort : null;
+  const resolveOpenCodeAgentForThread = useCallback(
+    (threadId: string | null) => {
+      if (!activeWorkspaceId) {
+        return null;
+      }
+      if (threadId && threadId in openCodeAgentByThreadId) {
+        return openCodeAgentByThreadId[threadId] ?? null;
+      }
+      return openCodeDefaultAgentByWorkspace[activeWorkspaceId] ?? null;
+    },
+    [activeWorkspaceId, openCodeAgentByThreadId, openCodeDefaultAgentByWorkspace],
+  );
+  const resolveOpenCodeVariantForThread = useCallback(
+    (threadId: string | null) => {
+      if (!activeWorkspaceId) {
+        return null;
+      }
+      if (threadId && threadId in openCodeVariantByThreadId) {
+        return openCodeVariantByThreadId[threadId] ?? null;
+      }
+      return openCodeDefaultVariantByWorkspace[activeWorkspaceId] ?? null;
+    },
+    [activeWorkspaceId, openCodeVariantByThreadId, openCodeDefaultVariantByWorkspace],
+  );
   const activeGitRoot = activeWorkspace?.settings.gitRoot ?? null;
   const normalizePath = useCallback((value: string) => {
     return value.replace(/\\/g, "/").replace(/\/+$/, "");
@@ -795,6 +969,10 @@ function MainApp() {
     startResume,
     startMcp,
     startStatus,
+    startExport,
+    startImport,
+    startLsp,
+    startShare,
     reviewPrompt,
     closeReviewPrompt,
     showPresetStep,
@@ -831,6 +1009,8 @@ function MainApp() {
     customPrompts: prompts,
     onMessageActivity: queueGitStatusRefresh,
     activeEngine,
+    resolveOpenCodeAgent: resolveOpenCodeAgentForThread,
+    resolveOpenCodeVariant: resolveOpenCodeVariantForThread,
   });
   const {
     activeAccount,
@@ -849,6 +1029,82 @@ function MainApp() {
   useEffect(() => {
     activeThreadIdRef.current = activeThreadId ?? null;
   }, [activeThreadId]);
+  const previousThreadIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const previous = previousThreadIdRef.current;
+    if (
+      previous &&
+      activeThreadId &&
+      previous !== activeThreadId &&
+      previous.startsWith("opencode-pending-") &&
+      activeThreadId.startsWith("opencode:")
+    ) {
+      setOpenCodeAgentByThreadId((prev) => {
+        if (!(previous in prev) || activeThreadId in prev) {
+          return prev;
+        }
+        return { ...prev, [activeThreadId]: prev[previous] ?? null };
+      });
+      setOpenCodeVariantByThreadId((prev) => {
+        if (!(previous in prev) || activeThreadId in prev) {
+          return prev;
+        }
+        return { ...prev, [activeThreadId]: prev[previous] ?? null };
+      });
+    }
+    previousThreadIdRef.current = activeThreadId ?? null;
+  }, [activeThreadId]);
+
+  const selectedOpenCodeAgent = useMemo(
+    () => resolveOpenCodeAgentForThread(activeThreadId),
+    [activeThreadId, resolveOpenCodeAgentForThread],
+  );
+  const selectedOpenCodeVariant = useMemo(
+    () => resolveOpenCodeVariantForThread(activeThreadId),
+    [activeThreadId, resolveOpenCodeVariantForThread],
+  );
+
+  const handleSelectOpenCodeAgent = useCallback(
+    (agentId: string | null) => {
+      if (!activeWorkspaceId) {
+        return;
+      }
+      const normalized = agentId && agentId.trim().length > 0 ? agentId : null;
+      setOpenCodeDefaultAgentByWorkspace((prev) => ({
+        ...prev,
+        [activeWorkspaceId]: normalized,
+      }));
+      if (!activeThreadId) {
+        return;
+      }
+      setOpenCodeAgentByThreadId((prev) => ({
+        ...prev,
+        [activeThreadId]: normalized,
+      }));
+    },
+    [activeThreadId, activeWorkspaceId],
+  );
+
+  const handleSelectOpenCodeVariant = useCallback(
+    (variant: string | null) => {
+      if (!activeWorkspaceId) {
+        return;
+      }
+      const normalized = variant && variant.trim().length > 0 ? variant : null;
+      setOpenCodeDefaultVariantByWorkspace((prev) => ({
+        ...prev,
+        [activeWorkspaceId]: normalized,
+      }));
+      if (!activeThreadId) {
+        return;
+      }
+      setOpenCodeVariantByThreadId((prev) => ({
+        ...prev,
+        [activeThreadId]: normalized,
+      }));
+    },
+    [activeThreadId, activeWorkspaceId],
+  );
 
   useAutoExitEmptyDiff({
     centerMode,
@@ -1045,6 +1301,67 @@ function MainApp() {
     [queueSaveSettings, setAppSettings],
   );
 
+  const handleLockPanel = useCallback(() => {
+    setIsPanelLocked(true);
+  }, []);
+
+  const handleUnlockPanel = useCallback(async (password: string) => {
+    try {
+      const filePassword = await readPanelLockPasswordFile();
+      if (filePassword == null) {
+        void writePanelLockPasswordFile(PANEL_LOCK_DEFAULT_PASSWORD);
+        setIsPanelLocked(false);
+        return true;
+      }
+      const normalized = filePassword.trim();
+      if (normalized.length === 0 || password === normalized) {
+        setIsPanelLocked(false);
+        return true;
+      }
+      return false;
+    } catch {
+      // 读取异常时避免用户被锁死
+      setIsPanelLocked(false);
+      return true;
+    }
+  }, []);
+
+  const handleDismissThreadCompletionNotice = useCallback((noticeId: string) => {
+    setThreadCompletionNotices((current) =>
+      current.filter((notice) => notice.id !== noticeId),
+    );
+  }, []);
+
+  const handleOpenThreadCompletionNotice = useCallback(
+    (notice: ThreadCompletionNotice) => {
+      exitDiffView();
+      setAppMode("chat");
+      setSelectedKanbanTaskId(null);
+      selectWorkspace(notice.workspaceId);
+      setActiveThreadId(notice.threadId, notice.workspaceId);
+      if (isCompact) {
+        setActiveTab("codex");
+      }
+      const threads = threadsByWorkspace[notice.workspaceId] ?? [];
+      const targetThread = threads.find((entry) => entry.id === notice.threadId);
+      if (targetThread?.engineSource) {
+        setActiveEngine(targetThread.engineSource);
+      }
+      setThreadCompletionNotices((current) =>
+        current.filter((item) => item.id !== notice.id),
+      );
+    },
+    [
+      exitDiffView,
+      isCompact,
+      selectWorkspace,
+      setActiveEngine,
+      setActiveTab,
+      setActiveThreadId,
+      threadsByWorkspace,
+    ],
+  );
+
   const openAppIconById = useOpenAppIcons(appSettings.openAppTargets);
 
   const persistProjectCopiesFolder = useCallback(
@@ -1202,6 +1519,10 @@ function MainApp() {
     startResume,
     startMcp,
     startStatus,
+    startExport,
+    startImport,
+    startLsp,
+    startShare,
   });
 
   const handleInsertComposerText = useComposerInsert({
@@ -1365,6 +1686,119 @@ function MainApp() {
       recentThreads: summaries,
     };
   }, [activeWorkspaceId, threadStatusById, threadsByWorkspace, t]);
+
+  const lockLiveSessions = useMemo(() => {
+    const sessions = workspaces.flatMap((workspace) => {
+      const threads = threadsByWorkspace[workspace.id] ?? [];
+      return threads.flatMap((thread) => {
+        const status = threadStatusById[thread.id];
+        if (!status?.isProcessing) {
+          return [];
+        }
+        const lastAgent = lastAgentMessageByThread[thread.id];
+        const updatedAt = Math.max(
+          thread.updatedAt ?? 0,
+          lastAgent?.timestamp ?? 0,
+          status?.processingStartedAt ?? 0,
+        );
+        return [{
+          id: `${workspace.id}:${thread.id}`,
+          workspaceName: workspace.name,
+          threadName: thread.name?.trim() || t("threads.untitledThread"),
+          engine: (thread.engineSource || "codex").toUpperCase(),
+          preview: resolveLockLivePreview(
+            threadItemsByThread[thread.id],
+            lastAgent?.text,
+          ),
+          updatedAt,
+          isProcessing: status?.isProcessing ?? false,
+        }];
+      });
+    });
+    return sessions
+      .sort((a, b) => b.updatedAt - a.updatedAt)
+      .slice(0, LOCK_LIVE_SESSION_LIMIT);
+  }, [
+    lastAgentMessageByThread,
+    threadItemsByThread,
+    threadStatusById,
+    threadsByWorkspace,
+    t,
+    workspaces,
+  ]);
+
+  useEffect(() => {
+    const previous = completionTrackerBySessionRef.current;
+    const next: Record<string, ThreadCompletionTracker> = {};
+    const completed: ThreadCompletionNotice[] = [];
+
+    for (const workspace of workspaces) {
+      const threads = threadsByWorkspace[workspace.id] ?? [];
+      for (const thread of threads) {
+        const key = `${workspace.id}:${thread.id}`;
+        const status = threadStatusById[thread.id];
+        const isProcessingNow = status?.isProcessing ?? false;
+        const lastDurationMs = status?.lastDurationMs ?? null;
+        const lastAgentTimestamp = lastAgentMessageByThread[thread.id]?.timestamp ?? 0;
+        const previousTracker = previous[key];
+        const wasProcessing = previousTracker?.isProcessing ?? false;
+        const previousDurationMs = previousTracker?.lastDurationMs ?? null;
+        const previousAgentTimestamp = previousTracker?.lastAgentTimestamp ?? 0;
+        const finishedByDuration =
+          !isProcessingNow &&
+          lastDurationMs !== null &&
+          lastDurationMs !== previousDurationMs;
+        const finishedByAgentUpdate =
+          !isProcessingNow &&
+          lastAgentTimestamp > previousAgentTimestamp &&
+          (wasProcessing || previousDurationMs !== null);
+
+        if ((wasProcessing && !isProcessingNow) || finishedByDuration || finishedByAgentUpdate) {
+          const completedAt = Date.now();
+          const lastAgent = lastAgentMessageByThread[thread.id];
+          const latestSnippet =
+            resolveLockLivePreview(threadItemsByThread[thread.id], lastAgent?.text) ||
+            thread.name?.trim() ||
+            t("threads.untitledThread");
+          completed.push({
+            id: key,
+            workspaceId: workspace.id,
+            workspaceName: workspace.name,
+            threadId: thread.id,
+            threadName: latestSnippet,
+            completedAt,
+          });
+        }
+
+        next[key] = {
+          isProcessing: isProcessingNow,
+          lastDurationMs,
+          lastAgentTimestamp,
+        };
+      }
+    }
+
+    if (!completionTrackerReadyRef.current) {
+      completionTrackerReadyRef.current = true;
+      completionTrackerBySessionRef.current = next;
+      return;
+    }
+
+    completionTrackerBySessionRef.current = next;
+    if (completed.length === 0) {
+      return;
+    }
+
+    const ordered = completed.sort((a, b) => b.completedAt - a.completedAt);
+    setThreadCompletionNotices((current) => {
+      let next = [...current];
+      for (const notice of ordered) {
+        // One bubble per session: newer completion replaces existing bubble.
+        next = [notice, ...next.filter((item) => item.id !== notice.id)];
+      }
+      return next.slice(0, THREAD_COMPLETION_NOTICE_LIMIT);
+    });
+  }, [lastAgentMessageByThread, t, threadStatusById, threadsByWorkspace, workspaces]);
 
   const {
     commitMessage,
@@ -1836,29 +2270,32 @@ function MainApp() {
     useState<string | null>(null);
   const [composerKanbanContextMode, setComposerKanbanContextMode] =
     useState<KanbanContextMode>("new");
-  const composerKanbanWorkspaceIds = useMemo(() => {
+  const composerKanbanWorkspacePaths = useMemo(() => {
     if (!activeWorkspace) {
       return [] as string[];
     }
-    const ids = new Set<string>();
-    ids.add(activeWorkspace.id);
+    const paths = new Set<string>();
+    paths.add(activeWorkspace.path);
     if (activeWorkspace.parentId) {
-      ids.add(activeWorkspace.parentId);
+      const parentWorkspace = workspaces.find((workspace) => workspace.id === activeWorkspace.parentId);
+      if (parentWorkspace) {
+        paths.add(parentWorkspace.path);
+      }
     }
     // If current workspace is a parent/main workspace, include its worktrees too.
     for (const workspace of workspaces) {
       if (workspace.parentId === activeWorkspace.id) {
-        ids.add(workspace.id);
+        paths.add(workspace.path);
       }
     }
-    return Array.from(ids);
+    return Array.from(paths);
   }, [activeWorkspace, workspaces]);
   const composerLinkedKanbanPanels = useMemo(() => {
-    if (composerKanbanWorkspaceIds.length === 0) {
+    if (composerKanbanWorkspacePaths.length === 0) {
       return [];
     }
     return kanbanPanels
-      .filter((panel) => composerKanbanWorkspaceIds.includes(panel.workspaceId))
+      .filter((panel) => composerKanbanWorkspacePaths.includes(panel.workspaceId))
       .slice()
       .sort((a, b) => b.createdAt - a.createdAt || a.sortOrder - b.sortOrder)
       .map((panel) => ({
@@ -1867,7 +2304,7 @@ function MainApp() {
         workspaceId: panel.workspaceId,
         createdAt: panel.createdAt,
       }));
-  }, [composerKanbanWorkspaceIds, kanbanPanels]);
+  }, [composerKanbanWorkspacePaths, kanbanPanels]);
 
   useEffect(() => {
     if (!selectedComposerKanbanPanelId) {
@@ -2007,7 +2444,7 @@ function MainApp() {
         "Kanban Task";
       const taskTitle = deriveKanbanTaskTitle(taskDescription, taskFallbackTitle);
       const createdTask = kanbanCreateTask({
-        workspaceId: activeWorkspaceId,
+        workspaceId: workspace.path,
         panelId,
         title: taskTitle,
         description: taskDescription,
@@ -2177,6 +2614,20 @@ function MainApp() {
       alertError(error);
     }
   }, [activeWorkspace?.path, alertError]);
+
+  const handleDeleteWorkspaceConversations = useCallback(
+    async (threadIds: string[]) => {
+      if (!activeWorkspace || threadIds.length === 0) {
+        return;
+      }
+      for (const threadId of threadIds) {
+        removeThread(activeWorkspace.id, threadId);
+        clearDraftForThread(threadId);
+        removeImagesForThread(threadId);
+      }
+    },
+    [activeWorkspace, clearDraftForThread, removeImagesForThread, removeThread],
+  );
 
   // --- Kanban conversation handlers ---
   const handleOpenTaskConversation = useCallback(
@@ -2628,6 +3079,7 @@ function MainApp() {
     activeItems,
     activeRateLimits,
     usageShowRemaining: appSettings.usageShowRemaining,
+    showMessageAnchors: appSettings.showMessageAnchors,
     accountInfo: activeAccount,
     onSwitchAccount: handleSwitchAccount,
     onCancelSwitchAccount: handleCancelSwitchAccount,
@@ -2795,6 +3247,7 @@ function MainApp() {
     onCheckoutBranch: handleCheckoutBranch,
     onCreateBranch: handleCreateBranch,
     onCopyThread: handleCopyThread,
+    onLockPanel: handleLockPanel,
     onToggleTerminal: handleToggleTerminal,
     showTerminalButton: !isCompact,
     launchScript: launchScriptState.launchScript,
@@ -2998,6 +3451,12 @@ function MainApp() {
     selectedEffort,
     onSelectEffort: setSelectedEffort,
     reasoningSupported: effectiveReasoningSupported,
+    opencodeAgents: openCodeAgents,
+    selectedOpenCodeAgent,
+    onSelectOpenCodeAgent: handleSelectOpenCodeAgent,
+    opencodeVariantOptions: OPENCODE_VARIANT_OPTIONS,
+    selectedOpenCodeVariant,
+    onSelectOpenCodeVariant: handleSelectOpenCodeVariant,
     accessMode,
     onSelectAccessMode: setAccessMode,
     skills,
@@ -3076,6 +3535,7 @@ function MainApp() {
       onContinueLatestConversation={handleContinueLatestConversation}
       onStartGuidedConversation={handleStartGuidedConversation}
       onRevealWorkspace={handleRevealActiveWorkspace}
+      onDeleteConversations={handleDeleteWorkspaceConversations}
     />
   ) : null;
 
@@ -3166,6 +3626,8 @@ function MainApp() {
               kanbanConversationWidth={kanbanConversationWidth}
               onKanbanConversationResizeStart={onKanbanConversationResizeStart}
               gitPanelNode={gitDiffPanelNode}
+              terminalOpen={terminalOpen}
+              onToggleTerminal={handleToggleTerminal}
             />
           ) : null
         }
@@ -3199,6 +3661,17 @@ function MainApp() {
         onSidebarResizeStart={onSidebarResizeStart}
         onRightPanelResizeStart={onRightPanelResizeStart}
         onPlanPanelResizeStart={onPlanPanelResizeStart}
+      />
+      <ThreadCompletionBubble
+        notices={threadCompletionNotices}
+        avoidBottomOffset={updaterState.stage !== "idle"}
+        onDismiss={handleDismissThreadCompletionNotice}
+        onOpen={handleOpenThreadCompletionNotice}
+      />
+      <LockScreenOverlay
+        isOpen={isPanelLocked}
+        onUnlock={handleUnlockPanel}
+        liveSessions={lockLiveSessions}
       />
       <SearchPalette
         isOpen={isSearchPaletteOpen}
