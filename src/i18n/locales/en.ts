@@ -297,12 +297,16 @@ const en = {
     // Workspace groups
     workspaceGroups: "Workspace Groups",
     createGroup: "Create Group",
-    renameGroup: "Rename Group",
+    renameGroup: "Rename",
     deleteGroup: "Delete Group",
     ungrouped: "Ungrouped",
     moveUp: "Move Up",
     moveDown: "Move Down",
     assignToGroup: "Assign to Group",
+    groupMoreActions: "More Actions",
+    groupCopiesFolder: "Copies Folder",
+    selectCopiesFolder: "Select Path...",
+    clearCopiesFolder: "Clear",
 
     // Projects section
     projectsTitle: "Projects",

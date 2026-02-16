@@ -296,12 +296,16 @@ const zh = {
     // 工作区组
     workspaceGroups: "工作区分组",
     createGroup: "创建分组",
-    renameGroup: "重命名分组",
+    renameGroup: "重命名",
     deleteGroup: "删除分组",
     ungrouped: "未分组",
     moveUp: "上移",
     moveDown: "下移",
     assignToGroup: "分配到组",
+    groupMoreActions: "更多操作",
+    groupCopiesFolder: "副本文件夹",
+    selectCopiesFolder: "选择路径...",
+    clearCopiesFolder: "清除",
 
     // 项目部分
     projectsTitle: "项目",

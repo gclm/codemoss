@@ -25,6 +25,24 @@ import Store from "lucide-react/dist/esm/icons/store";
 import Info from "lucide-react/dist/esm/icons/info";
 import { getVersion } from "@tauri-apps/api/app";
 import { openUrl } from "@tauri-apps/plugin-opener";
+import { GripVertical, MoreHorizontal, Pencil, FolderOpen, Plus } from "lucide-react";
+import { DragDropContext, Droppable, Draggable, type DropResult } from "@hello-pangea/dnd";
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import type {
   AppSettings,
   CodexDoctorResult,
@@ -286,7 +304,7 @@ export function SettingsView({
   onDeleteWorkspace,
   onCreateWorkspaceGroup,
   onRenameWorkspaceGroup,
-  onMoveWorkspaceGroup,
+  onMoveWorkspaceGroup: _onMoveWorkspaceGroup,
   onDeleteWorkspaceGroup,
   onAssignWorkspaceGroup,
   reduceTransparency,
@@ -329,7 +347,9 @@ export function SettingsView({
     Record<string, string>
   >({});
   const [groupDrafts, setGroupDrafts] = useState<Record<string, string>>({});
+  const [renamingGroupId, setRenamingGroupId] = useState<string | null>(null);
   const [newGroupName, setNewGroupName] = useState("");
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [groupError, setGroupError] = useState<string | null>(null);
   const [openAppDrafts, setOpenAppDrafts] = useState<OpenAppDraft[]>(() =>
     buildOpenAppDrafts(appSettings.openAppTargets),
@@ -909,6 +929,7 @@ export function SettingsView({
       const created = await onCreateWorkspaceGroup(newGroupName);
       if (created) {
         setNewGroupName("");
+        setCreateGroupOpen(false);
       }
     } catch (error) {
       setGroupError(error instanceof Error ? error.message : String(error));
@@ -994,6 +1015,32 @@ export function SettingsView({
     } catch (error) {
       setGroupError(error instanceof Error ? error.message : String(error));
     }
+  };
+
+  const handleDragEnd = (result: DropResult) => {
+    if (!result.destination) {
+      return;
+    }
+    const sourceIndex = result.source.index;
+    const destinationIndex = result.destination.index;
+    if (sourceIndex === destinationIndex) {
+      return;
+    }
+
+    const newGroups = Array.from(workspaceGroups);
+    const [moved] = newGroups.splice(sourceIndex, 1);
+    newGroups.splice(destinationIndex, 0, moved);
+
+    // Update sortOrder based on the new index to persist the order
+    const updatedGroups = newGroups.map((group, index) => ({
+      ...group,
+      sortOrder: index,
+    }));
+
+    void onUpdateAppSettings({
+      ...appSettings,
+      workspaceGroups: updatedGroups,
+    });
   };
 
   return (
@@ -1111,132 +1158,215 @@ export function SettingsView({
                 <div className="settings-section-subtitle">
                   {t("settings.projectsDescription")}
                 </div>
-                <div className="settings-subsection-title">{t("settings.groupsTitle")}</div>
+                <div className="settings-subsection-header">
+                  <div className="settings-subsection-title">{t("settings.groupsTitle")}</div>
+                  <Popover open={createGroupOpen} onOpenChange={setCreateGroupOpen}>
+                    <PopoverTrigger asChild>
+                      <button
+                        className="ghost icon-button"
+                        aria-label={t("settings.addGroupButton")}
+                      >
+                        <Plus aria-hidden />
+                      </button>
+                    </PopoverTrigger>
+                    <PopoverContent align="end" className="p-3">
+                      <div className="settings-popover-content">
+                        <div className="settings-field-label">
+                          {t("settings.newGroupPlaceholder")}
+                        </div>
+                        <input
+                          className="settings-input settings-input--compact"
+                          value={newGroupName}
+                          autoFocus
+                          placeholder={t("settings.newGroupPlaceholder")}
+                          onChange={(event) => setNewGroupName(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" && canCreateGroup) {
+                              event.preventDefault();
+                              void handleCreateGroup();
+                            }
+                          }}
+                        />
+                        <div className="settings-popover-actions">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setCreateGroupOpen(false)}
+                          >
+                            {t("common.cancel")}
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={!canCreateGroup}
+                            onClick={() => {
+                              void handleCreateGroup();
+                            }}
+                          >
+                            {t("common.create")}
+                          </Button>
+                        </div>
+                      </div>
+                    </PopoverContent>
+                  </Popover>
+                </div>
                 <div className="settings-subsection-subtitle">
                   {t("settings.groupsDescription")}
                 </div>
                 <div className="settings-groups">
-                  <div className="settings-group-create">
-                    <input
-                      className="settings-input settings-input--compact"
-                      value={newGroupName}
-                      placeholder={t("settings.newGroupPlaceholder")}
-                      onChange={(event) => setNewGroupName(event.target.value)}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" && canCreateGroup) {
-                          event.preventDefault();
-                          void handleCreateGroup();
-                        }
-                      }}
-                    />
-                    <button
-                      type="button"
-                      className="ghost settings-button-compact"
-                      onClick={() => {
-                        void handleCreateGroup();
-                      }}
-                      disabled={!canCreateGroup}
-                    >
-                      {t("settings.addGroupButton")}
-                    </button>
-                  </div>
                   {groupError && <div className="settings-group-error">{groupError}</div>}
                   {workspaceGroups.length > 0 ? (
-                    <div className="settings-group-list">
-                      {workspaceGroups.map((group, index) => (
-                        <div key={group.id} className="settings-group-row">
-                          <div className="settings-group-fields">
-                            <input
-                              className="settings-input settings-input--compact"
-                              value={groupDrafts[group.id] ?? group.name}
-                              onChange={(event) =>
-                                setGroupDrafts((prev) => ({
-                                  ...prev,
-                                  [group.id]: event.target.value,
-                                }))
-                              }
-                              onBlur={() => {
-                                void handleRenameGroup(group);
-                              }}
-                              onKeyDown={(event) => {
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  void handleRenameGroup(group);
-                                }
-                              }}
-                            />
-                            <div className="settings-group-copies">
-                              <div className="settings-group-copies-label">
-                                {t("settings.copiesFolder")}
-                              </div>
-                              <div className="settings-group-copies-row">
-                                <div
-                                  className={`settings-group-copies-path${
-                                    group.copiesFolder ? "" : " empty"
-                                  }`}
-                                  title={group.copiesFolder ?? ""}
-                                >
-                                  {group.copiesFolder ?? t("settings.notSet")}
-                                </div>
-                                <button
-                                  type="button"
-                                  className="ghost settings-button-compact"
-                                  onClick={() => {
-                                    void handleChooseGroupCopiesFolder(group);
-                                  }}
-                                >
-                                  {t("settings.chooseEllipsis")}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="ghost settings-button-compact"
-                                  onClick={() => {
-                                    void handleClearGroupCopiesFolder(group);
-                                  }}
-                                  disabled={!group.copiesFolder}
-                                >
-                                  {t("settings.clear")}
-                                </button>
-                              </div>
-                            </div>
+                    <DragDropContext onDragEnd={handleDragEnd}>
+                      <Droppable droppableId="settings-group-list">
+                        {(provided) => (
+                          <div
+                            className="settings-group-list"
+                            {...provided.droppableProps}
+                            ref={provided.innerRef}
+                          >
+                            {workspaceGroups.map((group, index) => (
+                              <Draggable
+                                key={group.id}
+                                draggableId={group.id}
+                                index={index}
+                              >
+                                {(provided, snapshot) => (
+                                  <div
+                                    ref={provided.innerRef}
+                                    {...provided.draggableProps}
+                                    className={`settings-group-row ${
+                                      snapshot.isDragging ? "is-dragging" : ""
+                                    }`}
+                                    style={provided.draggableProps.style}
+                                  >
+                                    <span
+                                      className="settings-group-drag-handle"
+                                      {...provided.dragHandleProps}
+                                    >
+                                      <GripVertical aria-hidden />
+                                    </span>
+
+                                    <div className="settings-group-name">
+                                      {renamingGroupId === group.id ? (
+                                        <input
+                                          className="settings-input settings-input--compact"
+                                          value={groupDrafts[group.id] ?? group.name}
+                                          autoFocus
+                                          onChange={(event) =>
+                                            setGroupDrafts((prev) => ({
+                                              ...prev,
+                                              [group.id]: event.target.value,
+                                            }))
+                                          }
+                                          onBlur={() => {
+                                            void handleRenameGroup(group);
+                                            setRenamingGroupId(null);
+                                          }}
+                                          onKeyDown={(event) => {
+                                            if (event.key === "Enter") {
+                                              event.preventDefault();
+                                              void handleRenameGroup(group);
+                                              setRenamingGroupId(null);
+                                            }
+                                            if (event.key === "Escape") {
+                                              setGroupDrafts((prev) => ({
+                                                ...prev,
+                                                [group.id]: group.name,
+                                              }));
+                                              setRenamingGroupId(null);
+                                            }
+                                          }}
+                                        />
+                                      ) : (
+                                        <span
+                                          className="settings-group-name-text"
+                                          onDoubleClick={() => setRenamingGroupId(group.id)}
+                                        >
+                                          {group.name}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {group.copiesFolder && (
+                                      <TooltipProvider>
+                                        <Tooltip>
+                                          <TooltipTrigger>
+                                            <span className="settings-group-folder-indicator">
+                                              <FolderOpen aria-hidden />
+                                            </span>
+                                          </TooltipTrigger>
+                                          <TooltipContent side="top">
+                                            <p>{group.copiesFolder}</p>
+                                          </TooltipContent>
+                                        </Tooltip>
+                                      </TooltipProvider>
+                                    )}
+
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <button
+                                          type="button"
+                                          className="ghost icon-button"
+                                          aria-label={t("settings.groupMoreActions")}
+                                        >
+                                          <MoreHorizontal aria-hidden />
+                                        </button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end" className="w-48">
+                                        <DropdownMenuItem
+                                          onSelect={() => setRenamingGroupId(group.id)}
+                                        >
+                                          <Pencil aria-hidden />
+                                          {t("settings.renameGroup")}
+                                        </DropdownMenuItem>
+
+                                        <DropdownMenuSeparator />
+
+                                        <DropdownMenuSub>
+                                          <DropdownMenuSubTrigger>
+                                            <FolderOpen aria-hidden />
+                                            {t("settings.copiesFolder")}
+                                          </DropdownMenuSubTrigger>
+                                          <DropdownMenuSubContent>
+                                            <DropdownMenuItem
+                                              onSelect={() => {
+                                                void handleChooseGroupCopiesFolder(group);
+                                              }}
+                                            >
+                                              {t("settings.chooseEllipsis")}
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem
+                                              onSelect={() => {
+                                                void handleClearGroupCopiesFolder(group);
+                                              }}
+                                              disabled={!group.copiesFolder}
+                                            >
+                                              {t("settings.clear")}
+                                            </DropdownMenuItem>
+                                          </DropdownMenuSubContent>
+                                        </DropdownMenuSub>
+
+                                        <DropdownMenuSeparator />
+
+                                        <DropdownMenuItem
+                                          variant="destructive"
+                                          onSelect={() => {
+                                            void handleDeleteGroup(group);
+                                          }}
+                                        >
+                                          <Trash2 aria-hidden />
+                                          {t("settings.deleteGroupAction")}
+                                        </DropdownMenuItem>
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
+                                  </div>
+                                )}
+                              </Draggable>
+                            ))}
+                            {provided.placeholder}
                           </div>
-                          <div className="settings-group-actions">
-                            <button
-                              type="button"
-                              className="ghost icon-button"
-                              onClick={() => {
-                                void onMoveWorkspaceGroup(group.id, "up");
-                              }}
-                              disabled={index === 0}
-                              aria-label={t("settings.moveGroupUp")}
-                            >
-                              <ChevronUp aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost icon-button"
-                              onClick={() => {
-                                void onMoveWorkspaceGroup(group.id, "down");
-                              }}
-                              disabled={index === workspaceGroups.length - 1}
-                              aria-label={t("settings.moveGroupDown")}
-                            >
-                              <ChevronDown aria-hidden />
-                            </button>
-                            <button
-                              type="button"
-                              className="ghost icon-button"
-                              onClick={() => {
-                                void handleDeleteGroup(group);
-                              }}
-                              aria-label={t("settings.deleteGroupAction")}
-                            >
-                              <Trash2 aria-hidden />
-                            </button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
+                        )}
+                      </Droppable>
+                    </DragDropContext>
                   ) : (
                     <div className="settings-empty">{t("settings.noGroupsYet")}</div>
                   )}
