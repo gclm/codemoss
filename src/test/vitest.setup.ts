@@ -1,5 +1,12 @@
 import { vi } from "vitest";
 
+if (typeof Element !== "undefined" && !Element.prototype.getAnimations) {
+  Object.defineProperty(Element.prototype, "getAnimations", {
+    value: () => [],
+    configurable: true,
+  });
+}
+
 // Mock react-i18next to return keys or fallback text during tests
 vi.mock("react-i18next", () => ({
   initReactI18next: {

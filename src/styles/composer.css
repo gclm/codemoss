@@ -1669,6 +1669,7 @@
   border: none;
   background: transparent;
   color: var(--text-faint);
+  margin-left: 4px;
   padding: 0;
   cursor: pointer;
 }

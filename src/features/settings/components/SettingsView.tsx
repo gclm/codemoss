@@ -617,6 +617,28 @@ export function SettingsView({
   }, [initialSection]);
 
   useEffect(() => {
+    const handleWindowKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) {
+        return;
+      }
+      const key = event.key.toLowerCase();
+      if (key === "escape") {
+        event.preventDefault();
+        onClose();
+        return;
+      }
+      if ((event.metaKey || event.ctrlKey) && key === "w") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleWindowKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleWindowKeyDown);
+    };
+  }, [onClose]);
+
+  useEffect(() => {
     if (activeSection !== "experimental") {
       return;
     }

@@ -1342,20 +1342,20 @@ export function Composer({
               >
                 <ClipboardList size={10} />
                 <span>{selectedLinkedPanel?.name ?? linkedKanbanPanels[0].name}</span>
-                {selectedLinkedPanel && (
-                  <button
-                    type="button"
-                    className="composer-kanban-trigger-link"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenLinkedKanbanPanel?.(selectedLinkedPanel.id);
-                    }}
-                  >
-                    <ExternalLink size={10} />
-                  </button>
-                )}
                 <ChevronDown size={10} />
               </button>
+              {selectedLinkedPanel && (
+                <button
+                  type="button"
+                  className="composer-kanban-trigger-link"
+                  aria-label={t("kanban.composer.openPanel")}
+                  onClick={() => {
+                    onOpenLinkedKanbanPanel?.(selectedLinkedPanel.id);
+                  }}
+                >
+                  <ExternalLink size={10} />
+                </button>
+              )}
 
               <ComposerContextMenuPopover
                 open={kanbanPopoverOpen}

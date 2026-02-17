@@ -742,7 +742,7 @@ export const Messages = memo(function Messages({
       window.clearTimeout(scrollThrottleRef.current);
     }
     scrollThrottleRef.current = window.setTimeout(() => {
-      if (!mountedRef.current) {
+      if (!mountedRef.current || typeof window === "undefined") {
         return;
       }
       startTransition(() => {

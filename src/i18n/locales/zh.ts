@@ -1442,6 +1442,7 @@ const zh = {
     },
     composer: {
       relatedPanels: "关联项目看板",
+      openPanel: "打开关联看板",
       empty: "暂无关联看板",
       count: "{{count}} 个看板",
       clear: "取消选择",

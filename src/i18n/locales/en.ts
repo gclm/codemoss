@@ -1446,6 +1446,7 @@ const en = {
     },
     composer: {
       relatedPanels: "Linked Project Panels",
+      openPanel: "Open linked panel",
       empty: "No linked panels",
       count: "{{count}} panels",
       clear: "Clear selection",
