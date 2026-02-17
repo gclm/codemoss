@@ -12,6 +12,7 @@ import type {
   OpenAppTarget,
   RequestUserInputRequest,
   RequestUserInputResponse,
+  TurnPlan,
 } from "../../../types";
 import { Markdown } from "./Markdown";
 import { DiffBlock } from "../../git/components/DiffBlock";
@@ -45,8 +46,13 @@ type MessagesProps = {
   onUserInputSubmit?: (
     request: RequestUserInputRequest,
     response: RequestUserInputResponse,
-  ) => void;
+  ) => Promise<void> | void;
   activeEngine?: "claude" | "codex" | "gemini" | "opencode";
+  activeCollaborationModeId?: string | null;
+  plan?: TurnPlan | null;
+  isPlanMode?: boolean;
+  isPlanProcessing?: boolean;
+  onOpenDiffPath?: (path: string) => void;
 };
 
 type StatusTone = "completed" | "processing" | "failed" | "unknown";
@@ -65,6 +71,7 @@ type WorkingIndicatorProps = {
 
 type MessageRowProps = {
   item: Extract<ConversationItem, { kind: "message" }>;
+  activeEngine?: "claude" | "codex" | "gemini" | "opencode";
   isCopied: boolean;
   onCopy: (item: Extract<ConversationItem, { kind: "message" }>) => void;
   codeBlockCopyUseModifier?: boolean;
@@ -75,7 +82,10 @@ type MessageRowProps = {
 type ReasoningRowProps = {
   item: Extract<ConversationItem, { kind: "reasoning" }>;
   parsed: ReturnType<typeof parseReasoning>;
+  displayTitle: string;
   isExpanded: boolean;
+  isCodex: boolean;
+  isLive: boolean;
   onToggle: (id: string) => void;
   onOpenFileLink?: (path: string) => void;
   onOpenFileLinkMenu?: (event: React.MouseEvent, path: string) => void;
@@ -426,6 +436,7 @@ const WorkingIndicator = memo(function WorkingIndicator({
 
 const MessageRow = memo(function MessageRow({
   item,
+  activeEngine = "claude",
   isCopied,
   onCopy,
   codeBlockCopyUseModifier,
@@ -453,6 +464,10 @@ const MessageRow = memo(function MessageRow({
     return extracted.length > 0 ? extracted : originalText;
   }, [item.role, item.text]);
   const hasText = displayText.trim().length > 0;
+  const markdownClassName =
+    item.role === "assistant" && activeEngine === "codex"
+      ? "markdown markdown-codex-canvas"
+      : "markdown";
   const imageItems = useMemo(() => {
     if (!item.images || item.images.length === 0) {
       return [];
@@ -481,7 +496,7 @@ const MessageRow = memo(function MessageRow({
         {hasText && (
           <Markdown
             value={displayText}
-            className="markdown"
+            className={markdownClassName}
             codeBlockStyle="message"
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}
             onOpenFileLink={onOpenFileLink}
@@ -515,16 +530,23 @@ const MessageRow = memo(function MessageRow({
 const ReasoningRow = memo(function ReasoningRow({
   item,
   parsed,
+  displayTitle,
   isExpanded,
+  isCodex,
+  isLive,
   onToggle,
   onOpenFileLink,
   onOpenFileLinkMenu,
 }: ReasoningRowProps) {
   const { t } = useTranslation();
-  const { summaryTitle, bodyText, hasBody } = parsed;
+  const { bodyText, hasBody } = parsed;
   const reasoningTone: StatusTone = hasBody ? "completed" : "processing";
   return (
-    <div className="tool-inline reasoning-inline">
+    <div
+      className={`tool-inline reasoning-inline${
+        isCodex ? " reasoning-inline-codex" : ""
+      }${isLive ? " is-live" : ""}`}
+    >
       <button
         type="button"
         className="tool-inline-bar-toggle"
@@ -544,7 +566,13 @@ const ReasoningRow = memo(function ReasoningRow({
             size={14}
             aria-hidden
           />
-          <span className="tool-inline-value">{summaryTitle}</span>
+          {isCodex && (
+            <span
+              className={`reasoning-inline-live-dot${isLive ? " is-live" : ""}`}
+              aria-hidden
+            />
+          )}
+          <span className="tool-inline-value">{displayTitle}</span>
         </button>
         {hasBody && (
           <Markdown
@@ -655,6 +683,11 @@ export const Messages = memo(function Messages({
   userInputRequests = [],
   onUserInputSubmit,
   activeEngine = "claude",
+  activeCollaborationModeId = null,
+  plan = null,
+  isPlanMode = false,
+  isPlanProcessing = false,
+  onOpenDiffPath,
 }: MessagesProps) {
   const { t } = useTranslation();
   const bottomRef = useRef<HTMLDivElement | null>(null);
@@ -800,6 +833,19 @@ export const Messages = memo(function Messages({
     return null;
   }, [items, reasoningMetaById]);
 
+  const latestReasoningId = useMemo(() => {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index];
+      if (item.kind === "message") {
+        break;
+      }
+      if (item.kind === "reasoning") {
+        return item.id;
+      }
+    }
+    return null;
+  }, [items]);
+
   const latestWorkingActivityLabel = useMemo(() => {
     let lastUserIndex = -1;
     for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -855,9 +901,15 @@ export const Messages = memo(function Messages({
         if (item.kind !== "reasoning") {
           return true;
         }
-        return reasoningMetaById.get(item.id)?.hasBody ?? false;
+        const hasBody = reasoningMetaById.get(item.id)?.hasBody ?? false;
+        if (hasBody) {
+          return true;
+        }
+        // Keep title-only reasoning visible for Codex canvas to surface
+        // real-time model thinking progress without affecting other engines.
+        return activeEngine === "codex";
       }),
-    [items, reasoningMetaById],
+    [activeEngine, items, reasoningMetaById],
   );
   const messageAnchors = useMemo(() => {
     const messageItems = visibleItems.filter(
@@ -973,6 +1025,7 @@ export const Messages = memo(function Messages({
         <div key={item.id} ref={bindMessageNode} data-message-anchor-id={item.id}>
           <MessageRow
             item={item}
+            activeEngine={activeEngine}
             isCopied={isCopied}
             onCopy={handleCopyMessage}
             codeBlockCopyUseModifier={codeBlockCopyUseModifier}
@@ -984,13 +1037,22 @@ export const Messages = memo(function Messages({
     }
     if (item.kind === "reasoning") {
       const isExpanded = expandedItems.has(item.id);
-      const parsed = reasoningMetaById.get(item.id) ?? parseReasoning(item);
+      const parsed =
+        reasoningMetaById.get(item.id) ??
+        parseReasoning(item);
+      const isCodexReasoning = activeEngine === "codex";
+      const isLiveReasoning =
+        isCodexReasoning && isThinking && latestReasoningId === item.id;
+      const displayTitle = parsed.summaryTitle;
       return (
         <ReasoningRow
           key={item.id}
           item={item}
           parsed={parsed}
+          displayTitle={displayTitle}
           isExpanded={isExpanded}
+          isCodex={isCodexReasoning}
+          isLive={isLiveReasoning}
           onToggle={toggleExpanded}
           onOpenFileLink={openFileLink}
           onOpenFileLinkMenu={showFileLinkMenu}
@@ -1019,6 +1081,7 @@ export const Messages = memo(function Messages({
           isExpanded={isExpanded}
           onToggle={toggleExpanded}
           onRequestAutoScroll={requestAutoScroll}
+          activeCollaborationModeId={activeCollaborationModeId}
         />
       );
     }
@@ -1033,7 +1096,27 @@ export const Messages = memo(function Messages({
       return <ReadToolGroupBlock key={`rg-${entry.items[0].id}`} items={entry.items} />;
     }
     if (entry.kind === "editGroup") {
-      return <EditToolGroupBlock key={`eg-${entry.items[0].id}`} items={entry.items} />;
+      return (
+        <EditToolGroupBlock
+          key={`eg-${entry.items[0].id}`}
+          items={entry.items}
+          plan={plan}
+          isPlanMode={isPlanMode}
+          isProcessing={isPlanProcessing}
+          onOpenDiffPath={onOpenDiffPath}
+          onOpenFullPlan={() => {
+            const planPanel = document.querySelector(".plan-panel");
+            if (!(planPanel instanceof HTMLElement)) {
+              return;
+            }
+            planPanel.scrollIntoView({ behavior: "smooth", block: "nearest" });
+            planPanel.classList.add("plan-panel-focus-ring");
+            window.setTimeout(() => {
+              planPanel.classList.remove("plan-panel-focus-ring");
+            }, 1400);
+          }}
+        />
+      );
     }
     if (entry.kind === "bashGroup") {
       return (

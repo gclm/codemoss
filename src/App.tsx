@@ -369,6 +369,7 @@ function MainApp() {
   const {
     settingsOpen,
     settingsSection,
+    settingsHighlightTarget,
     openSettings,
     closeSettings,
   } = useSettingsModalState();
@@ -541,12 +542,13 @@ function MainApp() {
 
   const {
     collaborationModes,
+    collaborationModesEnabled,
     selectedCollaborationMode,
     selectedCollaborationModeId,
     setSelectedCollaborationModeId,
   } = useCollaborationModes({
     activeWorkspace,
-    enabled: appSettings.experimentalCollaborationModesEnabled,
+    enabled: true,
     onDebug: addDebugEntry,
   });
 
@@ -718,9 +720,7 @@ function MainApp() {
     modelShortcut: appSettings.composerModelShortcut,
     accessShortcut: appSettings.composerAccessShortcut,
     reasoningShortcut: appSettings.composerReasoningShortcut,
-    collaborationShortcut: appSettings.experimentalCollaborationModesEnabled
-      ? appSettings.composerCollaborationShortcut
-      : null,
+    collaborationShortcut: appSettings.composerCollaborationShortcut,
     models: effectiveModels,
     collaborationModes,
     selectedModelId: effectiveSelectedModelId,
@@ -1464,6 +1464,7 @@ function MainApp() {
   const activePlan = activeThreadId
     ? planByThread[activeThreadId] ?? null
     : null;
+  const isPlanMode = selectedCollaborationMode?.mode === "plan";
   const hasActivePlan = Boolean(
     activePlan && (activePlan.steps.length > 0 || activePlan.explanation)
   );
@@ -3448,6 +3449,7 @@ function MainApp() {
     onEditQueued: handleEditQueued,
     onDeleteQueued: handleDeleteQueued,
     collaborationModes,
+    collaborationModesEnabled,
     selectedCollaborationModeId,
     onSelectCollaborationMode: setSelectedCollaborationModeId,
     engines: installedEngines,
@@ -3491,6 +3493,8 @@ function MainApp() {
     onDismissDictationError: clearDictationError,
     dictationHint,
     onDismissDictationHint: clearDictationHint,
+    onOpenExperimentalSettings: () =>
+      openSettings("experimental", "experimental-collaboration-modes"),
     composerSendLabel,
     composerLinkedKanbanPanels,
     selectedComposerKanbanPanelId,
@@ -3504,6 +3508,7 @@ function MainApp() {
     onFileReferenceModeChange: setFileReferenceMode,
     showComposer,
     plan: activePlan,
+    isPlanMode,
     debugEntries,
     debugOpen,
     terminalOpen,
@@ -3707,6 +3712,7 @@ function MainApp() {
                 onRemoveDictationModel={dictationModel.remove}
                 onClose={closeSettings}
                 initialSection={settingsSection ?? undefined}
+                initialHighlightTarget={settingsHighlightTarget ?? undefined}
               />
             </Suspense>
           ) : null

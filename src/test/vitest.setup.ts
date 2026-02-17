@@ -337,6 +337,24 @@ vi.mock("react-i18next", () => ({
         "settings.backgroundTerminalDesc": "Run long-running terminal commands in the background.",
         "settings.steerMode": "Steer mode",
         "settings.steerModeDesc": "Send messages immediately. Use Tab to queue while a run is active.",
+        "composer.collaborationCode": "Code",
+        "composer.collaborationPlan": "Plan",
+        "composer.collaborationModeDisabledHint":
+          "Enable collaboration modes in Settings > Experimental",
+        "composer.collaborationPlanHint":
+          "Plan mode enables interactive questions. It is different from the update_plan checklist tool.",
+        "composer.collaborationCodeInlineHint":
+          "{{mode}} · directly implement code changes",
+        "approval.showSecret": "Show",
+        "approval.hideSecret": "Hide",
+        "approval.submitFailed": "Submit failed. Please retry.",
+        "tools.userInputRequest": "User Input Request",
+        "tools.planQuickView": "Plan",
+        "tools.openFullPlanPanel": "Open full Plan panel",
+        "statusPanel.tabPlan": "Plan",
+        "statusPanel.emptyPlan": "No plan",
+        "statusPanel.planGenerating": "Generating plan...",
+        "statusPanel.planSwitchHint": "Switch to Plan mode to view plan",
         // Error messages
         "settings.unableToOpenConfig": "Unable to open config.",
         // Thread error messages

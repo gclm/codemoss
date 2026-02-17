@@ -137,6 +137,7 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
               header: String(question.header ?? ""),
               question: String(question.question ?? ""),
               isOther: Boolean(question.isOther ?? question.is_other),
+              isSecret: Boolean(question.isSecret ?? question.is_secret),
               options: options.length ? options : undefined,
             };
           })
@@ -564,6 +565,19 @@ export function useAppServerEvents(handlers: AppServerEventHandlers) {
       }
 
       if (method === "item/reasoning/textDelta") {
+        const params = message.params as Record<string, unknown>;
+        const threadId = String(params.threadId ?? params.thread_id ?? "");
+        const itemId = String(params.itemId ?? params.item_id ?? "");
+        const delta = String(params.delta ?? "");
+        if (threadId && itemId && delta) {
+          handlers.onReasoningTextDelta?.(workspace_id, threadId, itemId, delta);
+        }
+        return;
+      }
+
+      // Compatibility for Codex app-server variants that emit reasoning deltas
+      // without the "textDelta" suffix.
+      if (method === "item/reasoning/delta") {
         const params = message.params as Record<string, unknown>;
         const threadId = String(params.threadId ?? params.thread_id ?? "");
         const itemId = String(params.itemId ?? params.item_id ?? "");

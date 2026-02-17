@@ -57,6 +57,7 @@ function ComposerHarness({
       isProcessing={false}
       steerEnabled={false}
       collaborationModes={[]}
+      collaborationModesEnabled={true}
       selectedCollaborationModeId={null}
       onSelectCollaborationMode={() => {}}
       selectedEngine={selectedEngine}

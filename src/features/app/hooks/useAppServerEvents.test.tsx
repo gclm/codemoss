@@ -50,6 +50,7 @@ describe("useAppServerEvents", () => {
       onThreadStarted: vi.fn(),
       onBackgroundThreadAction: vi.fn(),
       onAgentMessageDelta: vi.fn(),
+      onReasoningTextDelta: vi.fn(),
       onReasoningSummaryBoundary: vi.fn(),
       onContextCompacted: vi.fn(),
       onApprovalRequest: vi.fn(),
@@ -96,6 +97,22 @@ describe("useAppServerEvents", () => {
       "ws-1",
       "thread-1",
       "reasoning-1",
+    );
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-1",
+        message: {
+          method: "item/reasoning/delta",
+          params: { threadId: "thread-1", itemId: "reasoning-1", delta: "checking..." },
+        },
+      });
+    });
+    expect(handlers.onReasoningTextDelta).toHaveBeenCalledWith(
+      "ws-1",
+      "thread-1",
+      "reasoning-1",
+      "checking...",
     );
 
     act(() => {
@@ -211,6 +228,7 @@ describe("useAppServerEvents", () => {
             header: "Confirm",
             question: "Proceed?",
             isOther: false,
+            isSecret: false,
             options: [
               { label: "Yes", description: "Continue." },
               { label: "No", description: "Stop." },
@@ -305,10 +323,65 @@ describe("useAppServerEvents", () => {
             header: "",
             question: "Choose",
             isOther: false,
+            isSecret: false,
             options: [
               { label: "Yes", description: "" },
               { label: "", description: "No label" },
             ],
+          },
+        ],
+      },
+    });
+
+    await act(async () => {
+      root.unmount();
+    });
+  });
+
+  it("normalizes secret input field from snake_case", async () => {
+    const handlers: Handlers = {
+      onRequestUserInput: vi.fn(),
+    };
+    const { root } = await mount(handlers);
+
+    act(() => {
+      listener?.({
+        workspace_id: "ws-secret",
+        message: {
+          method: "item/tool/requestUserInput",
+          id: 87,
+          params: {
+            thread_id: "thread-secret",
+            turn_id: "turn-secret",
+            item_id: "item-secret",
+            questions: [
+              {
+                id: "token",
+                header: "Credential",
+                question: "Paste token",
+                is_secret: true,
+              },
+            ],
+          },
+        },
+      });
+    });
+
+    expect(handlers.onRequestUserInput).toHaveBeenCalledWith({
+      workspace_id: "ws-secret",
+      request_id: 87,
+      params: {
+        thread_id: "thread-secret",
+        turn_id: "turn-secret",
+        item_id: "item-secret",
+        questions: [
+          {
+            id: "token",
+            header: "Credential",
+            question: "Paste token",
+            isOther: false,
+            isSecret: true,
+            options: undefined,
           },
         ],
       },
