@@ -993,6 +993,16 @@ export async function archiveThread(workspaceId: string, threadId: string) {
   return invoke<any>("archive_thread", { workspaceId, threadId });
 }
 
+export async function deleteOpenCodeSession(
+  workspaceId: string,
+  sessionId: string,
+) {
+  return invoke<{ deleted: boolean; method: "cli" | "filesystem" }>(
+    "opencode_delete_session",
+    { workspaceId, sessionId },
+  );
+}
+
 export async function getCommitMessagePrompt(
   workspaceId: string,
 ): Promise<string> {
