@@ -77,8 +77,7 @@ pub fn run() {
             {
                 app.handle()
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
-                app.handle()
-                    .plugin(tauri_plugin_notification::init())?;
+                app.handle().plugin(tauri_plugin_notification::init())?;
             }
 
             // Create the main window programmatically so we can register on_navigation
@@ -175,6 +174,7 @@ pub fn run() {
             engine::opencode_commands_list,
             engine::opencode_agents_list,
             engine::opencode_session_list,
+            engine::opencode_delete_session,
             engine::opencode_stats,
             engine::opencode_export_session,
             engine::opencode_import_session,
