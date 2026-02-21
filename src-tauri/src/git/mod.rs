@@ -43,6 +43,35 @@ fn trim_optional(input: Option<String>) -> Option<String> {
         .filter(|value| !value.is_empty())
 }
 
+fn is_branch_used_by_worktree_error(raw: &str) -> bool {
+    let message = raw.to_lowercase();
+    message.contains("cannot delete branch")
+        && message.contains("used by worktree at")
+}
+
+fn extract_worktree_path_from_delete_error(raw: &str) -> Option<String> {
+    let marker = "used by worktree at '";
+    let start = raw.find(marker)?;
+    let tail = &raw[start + marker.len()..];
+    let end = tail.find('\'')?;
+    let path = tail[..end].trim();
+    if path.is_empty() {
+        return None;
+    }
+    Some(path.to_string())
+}
+
+fn build_delete_branch_worktree_error(branch_name: &str, raw: &str) -> String {
+    if let Some(path) = extract_worktree_path_from_delete_error(raw) {
+        return format!(
+            "Cannot delete branch '{branch_name}' because it is currently used by worktree at '{path}'. Switch that worktree to another branch or remove that worktree, then retry."
+        );
+    }
+    format!(
+        "Cannot delete branch '{branch_name}' because it is currently used by another worktree. Switch that worktree to another branch or remove that worktree, then retry."
+    )
+}
+
 fn truncate_diff_lines(content: &str, max_lines: usize) -> (String, usize, bool) {
     if max_lines == 0 {
         return (String::new(), 0, false);
@@ -2634,6 +2663,7 @@ pub(crate) async fn delete_git_branch(
     workspace_id: String,
     name: String,
     force: Option<bool>,
+    remove_occupied_worktree: Option<bool>,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
     let workspaces = state.workspaces.lock().await;
@@ -2646,8 +2676,49 @@ pub(crate) async fn delete_git_branch(
     if branch_name.is_empty() {
         return Err("Branch name cannot be empty.".to_string());
     }
-    let flag = if force.unwrap_or(false) { "-D" } else { "-d" };
-    run_git_command(&repo_root, &["branch", flag, branch_name]).await
+    let force_delete = force.unwrap_or(false);
+    let remove_worktree_on_force = remove_occupied_worktree.unwrap_or(false);
+    let flag = if force_delete { "-D" } else { "-d" };
+    match run_git_command(&repo_root, &["branch", flag, branch_name]).await {
+        Ok(()) => Ok(()),
+        Err(delete_error) => {
+            if !is_branch_used_by_worktree_error(&delete_error) {
+                return Err(delete_error);
+            }
+            // Try once to clean stale worktree metadata, then retry delete.
+            let _ = run_git_command(&repo_root, &["worktree", "prune"]).await;
+            match run_git_command(&repo_root, &["branch", flag, branch_name]).await {
+                Ok(()) => Ok(()),
+                Err(retry_error) => {
+                    if force_delete && remove_worktree_on_force {
+                        if let Some(occupied_path) =
+                            extract_worktree_path_from_delete_error(&retry_error)
+                        {
+                            let _ = run_git_command(
+                                &repo_root,
+                                &["worktree", "remove", "--force", occupied_path.as_str()],
+                            )
+                            .await;
+                            if run_git_command(&repo_root, &["branch", flag, branch_name])
+                                .await
+                                .is_ok()
+                            {
+                                return Ok(());
+                            }
+                        }
+                    }
+                    if is_branch_used_by_worktree_error(&retry_error) {
+                        Err(build_delete_branch_worktree_error(
+                            branch_name,
+                            &retry_error,
+                        ))
+                    } else {
+                        Err(retry_error)
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[tauri::command]
@@ -3205,5 +3276,25 @@ mod tests {
             "feature/git-log".to_string()
         );
         assert!(validate_local_branch_name("feature..broken").is_err());
+    }
+
+    #[test]
+    fn detect_used_by_worktree_delete_error() {
+        let message =
+            "error: cannot delete branch 'feature/test' used by worktree at '/tmp/worktree'";
+        assert!(is_branch_used_by_worktree_error(message));
+        assert_eq!(
+            extract_worktree_path_from_delete_error(message).as_deref(),
+            Some("/tmp/worktree")
+        );
+    }
+
+    #[test]
+    fn build_actionable_used_by_worktree_error_with_path() {
+        let message =
+            "error: cannot delete branch 'feature/test' used by worktree at '/tmp/worktree'";
+        let friendly = build_delete_branch_worktree_error("feature/test", message);
+        assert!(friendly.contains("Switch that worktree to another branch"));
+        assert!(friendly.contains("/tmp/worktree"));
     }
 }

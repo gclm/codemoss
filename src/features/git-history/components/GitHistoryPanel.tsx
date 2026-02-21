@@ -37,6 +37,7 @@ import RefreshCw from "lucide-react/dist/esm/icons/refresh-cw";
 import Repeat from "lucide-react/dist/esm/icons/repeat";
 import RotateCcw from "lucide-react/dist/esm/icons/rotate-ccw";
 import Search from "lucide-react/dist/esm/icons/search";
+import ShieldAlert from "lucide-react/dist/esm/icons/shield-alert";
 import Trash2 from "lucide-react/dist/esm/icons/trash-2";
 import Undo2 from "lucide-react/dist/esm/icons/undo-2";
 import Upload from "lucide-react/dist/esm/icons/upload";
@@ -163,6 +164,14 @@ type GitOperationNoticeState = {
   kind: "success" | "error";
   message: string;
   debugMessage?: string;
+};
+
+type ForceDeleteDialogMode = "notMerged" | "worktreeOccupied";
+
+type ForceDeleteDialogState = {
+  mode: ForceDeleteDialogMode;
+  branch: string;
+  worktreePath: string | null;
 };
 
 type GitResetMode = "soft" | "mixed" | "hard" | "keep";
@@ -954,6 +963,10 @@ export function GitHistoryPanel({
   const [operationLoading, setOperationLoading] = useState<string | null>(null);
   const [operationNotice, setOperationNotice] = useState<GitOperationNoticeState | null>(null);
   const operationNoticeTimerRef = useRef<number | null>(null);
+  const [forceDeleteDialogState, setForceDeleteDialogState] = useState<ForceDeleteDialogState | null>(null);
+  const forceDeleteDialogResolverRef = useRef<((confirmed: boolean) => void) | null>(null);
+  const [forceDeleteCountdown, setForceDeleteCountdown] = useState(0);
+  const [forceDeleteCopiedPath, setForceDeleteCopiedPath] = useState(false);
   const [pushDialogOpen, setPushDialogOpen] = useState(false);
   const [pullDialogOpen, setPullDialogOpen] = useState(false);
   const [pullRemote, setPullRemote] = useState("origin");
@@ -2045,18 +2058,25 @@ export function GitHistoryPanel({
   const showOperationNotice = useCallback((notice: GitOperationNoticeState) => {
     if (operationNoticeTimerRef.current !== null) {
       window.clearTimeout(operationNoticeTimerRef.current);
+      operationNoticeTimerRef.current = null;
     }
     setOperationNotice(notice);
-    operationNoticeTimerRef.current = window.setTimeout(() => {
-      setOperationNotice(null);
-      operationNoticeTimerRef.current = null;
-    }, 5000);
+    if (notice.kind === "success") {
+      operationNoticeTimerRef.current = window.setTimeout(() => {
+        setOperationNotice(null);
+        operationNoticeTimerRef.current = null;
+      }, 5000);
+    }
   }, []);
 
   useEffect(() => {
     return () => {
       if (operationNoticeTimerRef.current !== null) {
         window.clearTimeout(operationNoticeTimerRef.current);
+      }
+      if (forceDeleteDialogResolverRef.current) {
+        forceDeleteDialogResolverRef.current(false);
+        forceDeleteDialogResolverRef.current = null;
       }
     };
   }, []);
@@ -2100,6 +2120,73 @@ export function GitHistoryPanel({
     },
     [localizeKnownGitError, t],
   );
+
+  const isBranchDeleteNotFullyMergedError = useCallback((rawMessage: string): boolean => {
+    const normalized = rawMessage.toLowerCase();
+    return normalized.includes("is not fully merged");
+  }, []);
+
+  const isBranchDeleteUsedByWorktreeError = useCallback((rawMessage: string): boolean => {
+    const normalized = rawMessage.toLowerCase();
+    return (
+      normalized.includes("cannot delete branch") &&
+      normalized.includes("used by worktree")
+    );
+  }, []);
+
+  const extractWorktreePathFromDeleteError = useCallback((rawMessage: string): string | null => {
+    const matched = rawMessage.match(/used by worktree at ['"]?([^'"\n]+)['"]?/i);
+    const path = matched?.[1]?.trim();
+    return path ? path : null;
+  }, []);
+
+  const promptForceDeleteDialog = useCallback(
+    (
+      mode: ForceDeleteDialogMode,
+      branch: string,
+      worktreePath: string | null,
+    ) =>
+      new Promise<boolean>((resolve) => {
+        forceDeleteDialogResolverRef.current = resolve;
+        setForceDeleteDialogState({ mode, branch, worktreePath });
+      }),
+    [],
+  );
+
+  const closeForceDeleteDialog = useCallback((confirmed: boolean) => {
+    setForceDeleteDialogState(null);
+    const resolver = forceDeleteDialogResolverRef.current;
+    forceDeleteDialogResolverRef.current = null;
+    resolver?.(confirmed);
+  }, []);
+
+  useEffect(() => {
+    if (!forceDeleteDialogState) {
+      setForceDeleteCountdown(0);
+      setForceDeleteCopiedPath(false);
+      return;
+    }
+    setForceDeleteCountdown(2);
+    setForceDeleteCopiedPath(false);
+    const timer = window.setInterval(() => {
+      setForceDeleteCountdown((previous) => (previous > 0 ? previous - 1 : 0));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [forceDeleteDialogState]);
+
+  const handleCopyForceDeleteWorktreePath = useCallback(async () => {
+    const path = forceDeleteDialogState?.worktreePath;
+    if (!path) {
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(path);
+      setForceDeleteCopiedPath(true);
+      window.setTimeout(() => setForceDeleteCopiedPath(false), 1200);
+    } catch {
+      setForceDeleteCopiedPath(false);
+    }
+  }, [forceDeleteDialogState?.worktreePath]);
 
   const runOperation = useCallback(
     async (name: string, action: () => Promise<void>) => {
@@ -3026,11 +3113,102 @@ export function GitHistoryPanel({
       return;
     }
     closeBranchContextMenu();
-    await runOperation("deleteBranch", async () => {
-      await deleteGitBranch(workspaceId, branchName, false);
+    const operationName = "deleteBranch";
+    const showDeleteFailure = (rawMessage: string) => {
+      const operationState = createOperationErrorState(rawMessage);
+      showOperationNotice({
+        kind: "error",
+        message: `${t("git.historyOperationFailed", {
+          operation: getOperationDisplayName(operationName),
+        })} ${operationState.userMessage}${
+          operationState.retryable ? ` ${t("git.historyOperationRetryHint")}` : ""
+        }`,
+        debugMessage: operationState.debugMessage,
+      });
+    };
+    const runForceDelete = async () => {
+      await deleteGitBranch(workspaceId, branchName, {
+        force: true,
+        removeOccupiedWorktree: true,
+      });
       setSelectedBranch(currentBranch ?? "all");
-    });
-  }, [closeBranchContextMenu, currentBranch, runOperation, selectedBranch, t, workspaceId]);
+      await refreshAll();
+      showOperationNotice({
+        kind: "success",
+        message: t("git.historyOperationSucceeded", {
+          operation: getOperationDisplayName(operationName),
+        }),
+      });
+    };
+    clearOperationNotice();
+    setOperationLoading(operationName);
+    try {
+      await deleteGitBranch(workspaceId, branchName);
+      setSelectedBranch(currentBranch ?? "all");
+      await refreshAll();
+      showOperationNotice({
+        kind: "success",
+        message: t("git.historyOperationSucceeded", {
+          operation: getOperationDisplayName(operationName),
+        }),
+      });
+    } catch (error) {
+      const rawMessage = error instanceof Error ? error.message : String(error);
+      if (isBranchDeleteNotFullyMergedError(rawMessage)) {
+        const forceConfirmed = await promptForceDeleteDialog(
+          "notMerged",
+          branchName,
+          null,
+        );
+        if (forceConfirmed) {
+          try {
+            await runForceDelete();
+            return;
+          } catch (forceError) {
+            showDeleteFailure(
+              forceError instanceof Error ? forceError.message : String(forceError),
+            );
+            return;
+          }
+        }
+      } else if (isBranchDeleteUsedByWorktreeError(rawMessage)) {
+        const forceConfirmed = await promptForceDeleteDialog(
+          "worktreeOccupied",
+          branchName,
+          extractWorktreePathFromDeleteError(rawMessage),
+        );
+        if (forceConfirmed) {
+          try {
+            await runForceDelete();
+            return;
+          } catch (forceError) {
+            showDeleteFailure(
+              forceError instanceof Error ? forceError.message : String(forceError),
+            );
+            return;
+          }
+        }
+      }
+      showDeleteFailure(rawMessage);
+    } finally {
+      setOperationLoading(null);
+    }
+  }, [
+    clearOperationNotice,
+    closeBranchContextMenu,
+    createOperationErrorState,
+    currentBranch,
+    getOperationDisplayName,
+    isBranchDeleteNotFullyMergedError,
+    isBranchDeleteUsedByWorktreeError,
+    extractWorktreePathFromDeleteError,
+    promptForceDeleteDialog,
+    refreshAll,
+    selectedBranch,
+    showOperationNotice,
+    t,
+    workspaceId,
+  ]);
 
   const handleRenameBranch = useCallback(async (targetBranch?: string | null) => {
     const branchName = targetBranch ?? selectedBranch;
@@ -4683,7 +4861,18 @@ export function GitHistoryPanel({
           className={operationNotice.kind === "error" ? "git-history-error" : "git-history-success"}
           title={operationNotice.debugMessage}
         >
-          {operationNotice.message}
+          <span>{operationNotice.message}</span>
+          {operationNotice.kind === "error" ? (
+            <button
+              type="button"
+              className="git-history-notice-close"
+              onClick={clearOperationNotice}
+              aria-label={t("common.close")}
+              title={t("common.close")}
+            >
+              <X size={12} />
+            </button>
+          ) : null}
         </div>
       )}
       {localizedOperationName && (
@@ -6926,6 +7115,115 @@ export function GitHistoryPanel({
                 </button>
               </div>
             </div>
+          </div>
+        ) : null}
+        {forceDeleteDialogState ? (
+          <div
+            className="git-history-create-branch-backdrop"
+            onMouseDown={(event) => {
+              if (event.target === event.currentTarget) {
+                closeForceDeleteDialog(false);
+              }
+            }}
+          >
+            <section
+              className="git-history-force-delete-dialog"
+              role="dialog"
+              aria-modal="true"
+              aria-label={t("git.historyTitleForceDeleteBranch")}
+            >
+              <div className="git-history-force-delete-header">
+                <span className="git-history-force-delete-title">
+                  <ShieldAlert size={16} />
+                  {t("git.historyTitleForceDeleteBranch")}
+                </span>
+                <button
+                  type="button"
+                  className="git-history-force-delete-close"
+                  onClick={() => closeForceDeleteDialog(false)}
+                  aria-label={t("common.close")}
+                  title={t("common.close")}
+                >
+                  <X size={14} />
+                </button>
+              </div>
+
+              <div className="git-history-force-delete-summary">
+                {forceDeleteDialogState.mode === "worktreeOccupied"
+                  ? t("git.historyForceDeleteDialogSubtitleWithWorktree", {
+                      branch: forceDeleteDialogState.branch,
+                    })
+                  : t("git.historyForceDeleteDialogSubtitleNotMerged", {
+                      branch: forceDeleteDialogState.branch,
+                    })}
+              </div>
+
+              <div className="git-history-force-delete-risk">
+                <strong>{t("git.historyForceDeleteDialogRiskTitle")}</strong>
+                <p>
+                  {forceDeleteDialogState.mode === "worktreeOccupied"
+                    ? t("git.historyForceDeleteDialogRiskWithWorktree")
+                    : t("git.historyForceDeleteDialogRiskNotMerged")}
+                </p>
+              </div>
+
+              <dl className="git-history-force-delete-facts">
+                <div>
+                  <dt>{t("git.historyForceDeleteDialogBranchLabel")}</dt>
+                  <dd>
+                    <code>{forceDeleteDialogState.branch}</code>
+                  </dd>
+                </div>
+                {forceDeleteDialogState.worktreePath ? (
+                  <div>
+                    <dt>{t("git.historyForceDeleteDialogWorktreeLabel")}</dt>
+                    <dd>
+                      <span className="git-history-force-delete-worktree-row">
+                        <code>{forceDeleteDialogState.worktreePath}</code>
+                        <button
+                          type="button"
+                          className="git-history-force-delete-copy"
+                          onClick={() => void handleCopyForceDeleteWorktreePath()}
+                        >
+                          {forceDeleteCopiedPath
+                            ? t("git.historyForceDeleteDialogCopied")
+                            : t("git.historyForceDeleteDialogCopyPath")}
+                        </button>
+                      </span>
+                    </dd>
+                  </div>
+                ) : null}
+              </dl>
+
+              <p className="git-history-force-delete-tip">
+                {t("git.historyForceDeleteDialogTip")}
+              </p>
+
+              <div className="git-history-create-branch-actions">
+                <button
+                  type="button"
+                  className="git-history-create-branch-btn is-cancel"
+                  onClick={() => closeForceDeleteDialog(false)}
+                >
+                  {t("common.cancel")}
+                </button>
+                <button
+                  type="button"
+                  className="git-history-create-branch-btn is-danger"
+                  disabled={forceDeleteCountdown > 0}
+                  onClick={() => closeForceDeleteDialog(true)}
+                >
+                  {(forceDeleteDialogState.mode === "worktreeOccupied"
+                    ? t("git.historyForceDeleteDialogConfirmWithWorktree")
+                    : t("git.historyForceDeleteDialogConfirm")) +
+                    (forceDeleteCountdown > 0
+                      ? ` (${t("git.historyForceDeleteDialogUnlockCountdown", {
+                          count: forceDeleteCountdown,
+                        })})`
+                      : "")}
+                </button>
+              </div>
+            </section>
           </div>
         ) : null}
         {createBranchDialogOpen ? (

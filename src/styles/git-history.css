@@ -2768,6 +2768,44 @@ button.git-history-overview-list-chip {
   font-size: 12px;
 }
 
+.git-history-error,
+.git-history-success {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.git-history-notice-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid color-mix(in srgb, var(--border-default) 82%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-control, #1a2230) 45%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.git-history-notice-close svg {
+  display: block;
+  stroke: currentColor;
+  stroke-width: 2.4;
+}
+
+.git-history-error .git-history-notice-close {
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318 38%, transparent);
+  background: color-mix(in srgb, #ffffff 72%, transparent);
+}
+
+.git-history-notice-close:hover {
+  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 56%, transparent);
+  color: var(--text-primary);
+}
+
 .git-history-error {
   background: color-mix(in srgb, #ef4444 14%, transparent);
 }
@@ -2904,6 +2942,153 @@ button.git-history-overview-list-chip {
   display: inline-flex;
   flex-wrap: wrap;
   gap: 4px;
+}
+
+.git-history-force-delete-dialog {
+  width: min(560px, 100%);
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, #ef4444 26%, var(--border-default));
+  background: color-mix(in srgb, var(--surface-card-muted, #111725) 94%, #0b1220);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.34);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.git-history-force-delete-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.git-history-force-delete-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: color-mix(in srgb, #ef4444 86%, var(--text-stronger));
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.git-history-force-delete-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--border-default) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-control, #1a2230) 66%, transparent);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.git-history-force-delete-summary {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.45;
+}
+
+.git-history-force-delete-risk {
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, #ef4444 34%, transparent);
+  background: color-mix(in srgb, #ef4444 14%, transparent);
+  padding: 9px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  animation: git-history-danger-pulse 2.2s ease-in-out infinite;
+}
+
+.git-history-force-delete-risk strong {
+  color: color-mix(in srgb, #ef4444 88%, var(--text-primary));
+  font-size: 12px;
+}
+
+.git-history-force-delete-risk p {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.git-history-force-delete-facts {
+  margin: 0;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--border-default) 72%, transparent);
+  background: color-mix(in srgb, var(--surface-control, #1a2230) 54%, transparent);
+  overflow: hidden;
+}
+
+.git-history-force-delete-facts > div {
+  margin: 0;
+  padding: 8px 10px;
+  display: grid;
+  gap: 4px;
+}
+
+.git-history-force-delete-facts > div + div {
+  border-top: 1px solid color-mix(in srgb, var(--border-default) 62%, transparent);
+}
+
+.git-history-force-delete-facts dt {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.git-history-force-delete-facts dd {
+  margin: 0;
+}
+
+.git-history-force-delete-facts code {
+  font-size: 11px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.git-history-force-delete-worktree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.git-history-force-delete-copy {
+  flex: 0 0 auto;
+  border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface-control, #1a2230) 64%, transparent);
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 8px;
+  cursor: pointer;
+}
+
+.git-history-force-delete-copy:hover {
+  border-color: color-mix(in srgb, var(--accent-primary, #2563eb) 56%, transparent);
+  color: var(--text-primary);
+}
+
+.git-history-force-delete-tip {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+@keyframes git-history-danger-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.16);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(239, 68, 68, 0.04);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.16);
+  }
 }
 
 .git-history-toolbar-confirm-dialog {

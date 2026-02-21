@@ -13,6 +13,7 @@ const zh = {
     close: "关闭",
     restore: "还原",
     confirm: "确认",
+    ok: "确定",
     edit: "编辑",
     refresh: "刷新",
     retry: "重试",
@@ -1035,6 +1036,10 @@ const zh = {
     historyErrorResetFailed: "重置失败。请先处理本地改动或冲突后重试。",
     historyErrorCommandTimeout: "Git 命令执行超时。请检查网络、代理或凭据后重试。",
     historyErrorAuthRequired: "Git 认证失败或需要凭据。请先完成仓库认证后重试。",
+    historyErrorBranchUsedByWorktree:
+      "该分支正被其他 worktree 使用。请先切换或移除占用该分支的 worktree，再重试。",
+    historyErrorBranchUsedByWorktreeAt:
+      "该分支正被工作树 {{path}} 使用。请先切换该工作树分支或移除该工作树，再重试。",
     historyWorkingTreeDirtySummary:
       "工作区有 {{count}} 个文件存在未提交改动。",
     historyChangedFilesCount: "检测到 {{count}} 个变更文件。",
@@ -1053,6 +1058,30 @@ const zh = {
     historyPromptRenameBranch: "请输入新的分支名称",
     historyConfirmDeleteBranch: "确认删除分支 {{branch}} 吗？",
     historyTitleDeleteBranch: "删除分支",
+    historyConfirmForceDeleteBranch:
+      "分支 {{branch}} 尚未完全合并。确认强制删除吗？",
+    historyConfirmForceDeleteBranchWithWorktree:
+      "分支 {{branch}} 正被某个 worktree 使用。确认强制移除占用的 worktree 并删除该分支吗？",
+    historyTitleForceDeleteBranch: "强制删除分支",
+    historyForceDeleteDialogSubtitleNotMerged:
+      "分支 {{branch}} 仍有未合并提交。",
+    historyForceDeleteDialogSubtitleWithWorktree:
+      "分支 {{branch}} 当前被关联 worktree 占用。",
+    historyForceDeleteDialogRiskTitle: "高风险操作",
+    historyForceDeleteDialogRiskNotMerged:
+      "强制删除会永久移除该分支引用。若这些提交没有其他引用，后续恢复成本会显著增加。",
+    historyForceDeleteDialogRiskWithWorktree:
+      "强制删除会先移除占用该分支的 worktree，再删除分支引用。请确保该 worktree 中没有未备份内容。",
+    historyForceDeleteDialogBranchLabel: "目标分支",
+    historyForceDeleteDialogWorktreeLabel: "占用工作树",
+    historyForceDeleteDialogTip:
+      "如果不确定，建议先取消并做好备份（例如先打临时 tag）。",
+    historyForceDeleteDialogConfirm: "强制删除分支",
+    historyForceDeleteDialogConfirmWithWorktree:
+      "强制移除工作树并删除分支",
+    historyForceDeleteDialogCopyPath: "复制路径",
+    historyForceDeleteDialogCopied: "已复制",
+    historyForceDeleteDialogUnlockCountdown: "{{count}}秒",
     historyConfirmMergeBranchIntoCurrent: "确认将 {{branch}} 合并到当前分支吗？",
     historyTitleMergeBranch: "合并分支",
     historyConfirmCheckoutAndRebaseCurrent:
@@ -1469,6 +1498,9 @@ const zh = {
     publishToOriginHint:
       "开启示例：创建 feat/login-page 后自动执行 `git push -u origin feat/login-page`。",
     worktreeCreateResultTitle: "工作树创建结果",
+    worktreeResultSuccessSubtitle: "本地与远端状态已汇总，可确认后继续开发。",
+    worktreeResultWarningSubtitle: "本地创建成功，但远端发布异常，请按提示处理。",
+    worktreeResultErrorTitle: "重点告警",
     worktreeCreateSuccess: "工作树已在本地创建：{{branch}}",
     worktreePublishStatusCreatedTracking: "远端发布成功，已设置 tracking：{{tracking}}。",
     worktreePublishStatusCreatedNoTracking: "远端发布成功，但未返回 tracking 信息。",

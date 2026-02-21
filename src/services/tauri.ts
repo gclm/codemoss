@@ -1067,9 +1067,17 @@ export async function createGitBranchFromCommit(
 export async function deleteGitBranch(
   workspaceId: string,
   name: string,
-  force = false,
+  options?: {
+    force?: boolean;
+    removeOccupiedWorktree?: boolean;
+  },
 ) {
-  return invoke("delete_git_branch", { workspaceId, name, force });
+  return invoke("delete_git_branch", {
+    workspaceId,
+    name,
+    force: options?.force ?? false,
+    removeOccupiedWorktree: options?.removeOccupiedWorktree ?? false,
+  });
 }
 
 export async function renameGitBranch(
