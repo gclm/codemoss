@@ -80,6 +80,10 @@ vi.mock("../../../services/tauri", () => ({
   createGitBranchFromCommit: vi.fn(async () => undefined),
   deleteGitBranch: vi.fn(async () => undefined),
   fetchGit: vi.fn(async () => undefined),
+  getGitBranchCompareCommits: vi.fn(async () => ({
+    targetOnlyCommits: [],
+    currentOnlyCommits: [],
+  })),
   getGitStatus: vi.fn(async () => ({
     files: [],
     totalAdditions: 0,
@@ -160,6 +164,7 @@ vi.mock("../../../services/tauri", () => ({
         isCurrent: true,
         isRemote: false,
         remote: null,
+        upstream: "origin/main",
         lastCommit: 1739300000,
         ahead: 0,
         behind: 0,
@@ -168,9 +173,16 @@ vi.mock("../../../services/tauri", () => ({
     remoteBranches: [],
     currentBranch: "main",
   })),
+  getGitWorktreeDiffAgainstBranch: vi.fn(async () => []),
+  getGitWorktreeDiffFileAgainstBranch: vi.fn(async () => ({
+    path: "src/main/java/com/demo/App.java",
+    status: "M",
+    diff: "diff --git a/src/main/java/com/demo/App.java b/src/main/java/com/demo/App.java\n@@ -1 +1 @@\n-old\n+new\n",
+  })),
   mergeGitBranch: vi.fn(async () => undefined),
   pullGit: vi.fn(async () => undefined),
   pushGit: vi.fn(async () => undefined),
+  rebaseGitBranch: vi.fn(async () => undefined),
   resetGitCommit: vi.fn(async () => undefined),
   renameGitBranch: vi.fn(async () => undefined),
   resolveGitCommitRef: vi.fn(async () => "a".repeat(40)),
@@ -234,6 +246,408 @@ describe("GitHistoryPanel helpers", () => {
 });
 
 describe("GitHistoryPanel interactions", () => {
+  it("opens pull dialog and runs pull only after confirm", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.pull")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("git.pull")[0]);
+    expect(screen.getByRole("dialog", { name: "git.historyPullDialogTitle" })).toBeTruthy();
+    expect(tauriService.pullGit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByText("git.pull")[1]);
+
+    await waitFor(() => {
+      expect(tauriService.pullGit).toHaveBeenCalledWith(
+        "w1",
+        expect.objectContaining({
+          remote: "origin",
+          branch: "main",
+        }),
+      );
+    });
+  });
+
+  it("opens sync dialog and runs sync only after confirm", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.sync")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("git.sync")[0]);
+    expect(screen.getByRole("dialog", { name: "git.historySyncDialogTitle" })).toBeTruthy();
+    expect(tauriService.syncGit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByText("git.sync")[1]);
+
+    await waitFor(() => {
+      expect(tauriService.syncGit).toHaveBeenCalledWith("w1");
+    });
+  });
+
+  it("opens fetch dialog and runs fetch only after confirm", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.fetch")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("git.fetch")[0]);
+    expect(screen.getByRole("dialog", { name: "git.historyFetchDialogTitle" })).toBeTruthy();
+    expect(tauriService.fetchGit).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByText("git.fetch")[1]);
+
+    await waitFor(() => {
+      expect(tauriService.fetchGit).toHaveBeenCalledWith("w1");
+    });
+  });
+
+  it("opens refresh dialog and refreshes only after confirm", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.refresh")).toBeTruthy();
+    });
+
+    const beforeCount = vi.mocked(tauriService.getGitCommitHistory).mock.calls.length;
+    fireEvent.click(screen.getByText("git.refresh"));
+    expect(screen.getByRole("dialog", { name: "git.historyRefreshDialogTitle" })).toBeTruthy();
+
+    fireEvent.click(screen.getAllByText("git.refresh")[1]);
+
+    await waitFor(() => {
+      expect(vi.mocked(tauriService.getGitCommitHistory).mock.calls.length).toBeGreaterThan(beforeCount);
+    });
+  });
+
+  it("renders unified intent sections and fetch scope example", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.fetch")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("git.fetch")[0]);
+    expect(screen.getByText("git.historyIntentTitle")).toBeTruthy();
+    expect(screen.getByText("git.historyWillHappenTitle")).toBeTruthy();
+    expect(screen.getByText("git.historyWillNotHappenTitle")).toBeTruthy();
+    expect(screen.getByText("git.historyExampleTitle")).toBeTruthy();
+    expect(screen.getByText("git.historyFetchDialogWillHappen")).toBeTruthy();
+    expect(screen.getByText("git fetch --all")).toBeTruthy();
+  });
+
+  it("shows sync preflight summary before execution", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.sync")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("git.sync")[0]);
+    await waitFor(() => {
+      expect(screen.getByText("git.historySyncDialogAheadBehind")).toBeTruthy();
+      expect(screen.getByText("feat: one")).toBeTruthy();
+    });
+    expect(tauriService.syncGit).not.toHaveBeenCalled();
+  });
+
+  it("uses distinct toolbar visuals for fetch and refresh actions", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(screen.getByText("git.fetch")).toBeTruthy();
+      expect(screen.getByText("git.refresh")).toBeTruthy();
+    });
+
+    const fetchButton = screen.getByText("git.fetch").closest(".git-history-chip");
+    const refreshButton = screen.getByText("git.refresh").closest(".git-history-chip");
+    expect(fetchButton).toBeTruthy();
+    expect(refreshButton).toBeTruthy();
+    expect(fetchButton?.innerHTML).not.toEqual(refreshButton?.innerHTML);
+  });
+
+  it("opens branch context menu with tracking summary", async () => {
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-branch-row .git-history-branch-name")).toBeTruthy();
+    });
+
+    const branchRow = Array.from(document.querySelectorAll(".git-history-branch-row")).find((row) =>
+      row.textContent?.includes("main"),
+    );
+    expect(branchRow).toBeTruthy();
+    fireEvent.contextMenu(branchRow as Element, { clientX: 160, clientY: 180 });
+
+    await waitFor(() => {
+      expect(screen.getByRole("menu")).toBeTruthy();
+    });
+
+    expect(screen.getByText("main -> origin/main")).toBeTruthy();
+    const menuItems = screen.getAllByRole("menuitem");
+    expect(menuItems[0]?.textContent).toContain("git.historyBranchMenuCheckout");
+  });
+
+  it("runs checkout then rebase from branch context menu", async () => {
+    vi.mocked(tauriService.listGitBranches).mockResolvedValue({
+      branches: [],
+      localBranches: [
+        {
+          name: "main",
+          isCurrent: true,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/main",
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+        {
+          name: "rebase-target",
+          isCurrent: false,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/rebase-target",
+          lastCommit: 1739299999,
+          ahead: 0,
+          behind: 0,
+        },
+      ],
+      remoteBranches: [],
+      currentBranch: "main",
+    } as never);
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-branch-row .git-history-branch-name")).toBeTruthy();
+    });
+
+    const branchRow = Array.from(document.querySelectorAll(".git-history-branch-row")).find((row) =>
+      row.textContent?.includes("rebase-target"),
+    );
+    expect(branchRow).toBeTruthy();
+    fireEvent.contextMenu(branchRow as Element, { clientX: 160, clientY: 180 });
+
+    const checkoutRebaseAction = await screen.findByText(
+      "git.historyBranchMenuCheckoutAndRebaseCurrent",
+    );
+    const checkoutRebaseButton = checkoutRebaseAction.closest('[role="menuitem"]');
+    expect(checkoutRebaseButton).toBeTruthy();
+    fireEvent.click(checkoutRebaseButton as Element);
+
+    await waitFor(() => {
+      expect(tauriService.checkoutGitBranch).toHaveBeenCalledWith("w1", "rebase-target");
+      expect(tauriService.rebaseGitBranch).toHaveBeenCalledWith("w1", "main");
+    });
+  });
+
+  it("opens branch vs worktree diff modal from branch context menu", async () => {
+    vi.mocked(tauriService.listGitBranches).mockResolvedValue({
+      branches: [],
+      localBranches: [
+        {
+          name: "main",
+          isCurrent: true,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/main",
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+        {
+          name: "diff-target",
+          isCurrent: false,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/diff-target",
+          lastCommit: 1739299998,
+          ahead: 0,
+          behind: 0,
+        },
+      ],
+      remoteBranches: [],
+      currentBranch: "main",
+    } as never);
+    vi.mocked(tauriService.getGitWorktreeDiffAgainstBranch).mockResolvedValue([
+      {
+        path: "src/main/java/com/demo/App.java",
+        status: "M",
+        diff: "",
+      } as never,
+    ]);
+    vi.mocked(tauriService.getGitWorktreeDiffFileAgainstBranch).mockResolvedValue({
+      path: "src/main/java/com/demo/App.java",
+      status: "M",
+      diff: "diff --git a/src/main/java/com/demo/App.java b/src/main/java/com/demo/App.java\n@@ -1 +1 @@\n-old\n+new\n",
+    } as never);
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-branch-row .git-history-branch-name")).toBeTruthy();
+    });
+
+    const branchRow = Array.from(document.querySelectorAll(".git-history-branch-row")).find((row) =>
+      row.textContent?.includes("diff-target"),
+    );
+    expect(branchRow).toBeTruthy();
+    fireEvent.contextMenu(branchRow as Element, { clientX: 160, clientY: 180 });
+
+    const showDiffAction = await screen.findByText("git.historyBranchMenuShowDiffWithWorktree");
+    const showDiffButton = showDiffAction.closest('[role="menuitem"]');
+    expect(showDiffButton).toBeTruthy();
+    fireEvent.click(showDiffButton as Element);
+
+    await waitFor(() => {
+      expect(tauriService.getGitWorktreeDiffAgainstBranch).toHaveBeenCalledWith(
+        "w1",
+        "diff-target",
+      );
+      expect(screen.getByText("git.historyBranchWorktreeDiffTitle")).toBeTruthy();
+      expect(screen.getByText("src/main/java/com/demo/App.java")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("src/main/java/com/demo/App.java"));
+
+    await waitFor(() => {
+      expect(tauriService.getGitWorktreeDiffFileAgainstBranch).toHaveBeenCalledWith(
+        "w1",
+        "diff-target",
+        "src/main/java/com/demo/App.java",
+      );
+      expect(screen.getByTestId("git-diff-viewer")).toBeTruthy();
+    });
+  });
+
+  it("opens branch vs current branch diff modal from branch context menu", async () => {
+    vi.mocked(tauriService.listGitBranches).mockResolvedValue({
+      branches: [],
+      localBranches: [
+        {
+          name: "main",
+          isCurrent: true,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/main",
+          lastCommit: 1739300000,
+          ahead: 0,
+          behind: 0,
+        },
+        {
+          name: "diff-target",
+          isCurrent: false,
+          isRemote: false,
+          remote: null,
+          upstream: "origin/diff-target",
+          lastCommit: 1739299998,
+          ahead: 0,
+          behind: 0,
+        },
+      ],
+      remoteBranches: [],
+      currentBranch: "main",
+    } as never);
+    vi.mocked(tauriService.getGitBranchCompareCommits).mockResolvedValue({
+      targetOnlyCommits: [
+        {
+          sha: "b".repeat(40),
+          shortSha: "bbbbbbb",
+          summary: "feat: target only",
+          message: "target only message",
+          author: "tester",
+          authorEmail: "tester@example.com",
+          timestamp: 1739300100,
+          parents: ["a".repeat(40)],
+          refs: [],
+        },
+      ],
+      currentOnlyCommits: [
+        {
+          sha: "c".repeat(40),
+          shortSha: "ccccccc",
+          summary: "fix: current only",
+          message: "current only message",
+          author: "tester",
+          authorEmail: "tester@example.com",
+          timestamp: 1739300200,
+          parents: ["a".repeat(40)],
+          refs: [],
+        },
+      ],
+    });
+    vi.mocked(tauriService.getGitCommitDetails).mockResolvedValueOnce({
+      sha: "b".repeat(40),
+      summary: "feat: target only",
+      message: "target only message",
+      author: "tester",
+      authorEmail: "tester@example.com",
+      committer: "tester",
+      committerEmail: "tester@example.com",
+      authorTime: 1739300100,
+      commitTime: 1739300100,
+      parents: ["a".repeat(40)],
+      files: [
+        {
+          path: "src/main/java/com/demo/App.java",
+          status: "M",
+          additions: 4,
+          deletions: 1,
+          diff: "diff --git a/src/main/java/com/demo/App.java b/src/main/java/com/demo/App.java\n@@ -1 +1 @@\n-old\n+new\n",
+          lineCount: 4,
+          truncated: false,
+        },
+      ],
+      totalAdditions: 4,
+      totalDeletions: 1,
+    });
+
+    render(<GitHistoryPanel workspace={workspace as never} />);
+
+    await waitFor(() => {
+      expect(document.querySelector(".git-history-branch-row .git-history-branch-name")).toBeTruthy();
+    });
+
+    const branchRow = Array.from(document.querySelectorAll(".git-history-branch-row")).find((row) =>
+      row.textContent?.includes("diff-target"),
+    );
+    expect(branchRow).toBeTruthy();
+    fireEvent.contextMenu(branchRow as Element, { clientX: 160, clientY: 180 });
+
+    const compareAction = await screen.findByText("git.historyBranchMenuCompareWithCurrent");
+    const compareButton = compareAction.closest('[role="menuitem"]');
+    expect(compareButton).toBeTruthy();
+    fireEvent.click(compareButton as Element);
+
+    await waitFor(() => {
+      expect(tauriService.getGitBranchCompareCommits).toHaveBeenCalledWith(
+        "w1",
+        "diff-target",
+        "main",
+      );
+      expect(screen.getByText("git.historyBranchCompareDiffTitle")).toBeTruthy();
+      expect(screen.getByText("feat: target only")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByText("feat: target only"));
+
+    await waitFor(() => {
+      expect(tauriService.getGitCommitDetails).toHaveBeenCalledWith("w1", "b".repeat(40));
+      expect(screen.getByText("src/main/java/com/demo/App.java")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getAllByText("src/main/java/com/demo/App.java")[0] as Element);
+
+    await waitFor(() => {
+      expect(screen.getByTestId("git-diff-viewer")).toBeTruthy();
+    });
+  });
+
   it("supports select commit -> click file -> open diff modal", async () => {
     render(<GitHistoryPanel workspace={workspace as never} />);
 
