@@ -109,7 +109,7 @@ describe("Messages", () => {
         kind: "message",
         role: "user",
         text:
-          "[System] 你是 CodeMoss 内的 Claude Code Agent。 [Skill Prompt] # Skill: tr-zh-en-jp 技能说明... [Commons Prompt] 规范... [User Input] 你好啊",
+          "[System] 你是 MossX 内的 Claude Code Agent。 [Skill Prompt] # Skill: tr-zh-en-jp 技能说明... [Commons Prompt] 规范... [User Input] 你好啊",
       },
     ];
 
