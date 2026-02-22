@@ -79,7 +79,7 @@ export function useThreadEventHandlers({
   const isReasoningRawDebugEnabled = () => {
     if (import.meta.env?.DEV) {
       try {
-        const value = window.localStorage.getItem("codemoss.debug.reasoning.raw");
+        const value = window.localStorage.getItem("mossx.debug.reasoning.raw");
         if (!value) {
           return true;
         }
@@ -93,7 +93,7 @@ export function useThreadEventHandlers({
       return false;
     }
     try {
-      const value = window.localStorage.getItem("codemoss.debug.reasoning.raw");
+      const value = window.localStorage.getItem("mossx.debug.reasoning.raw");
       if (!value) {
         return false;
       }

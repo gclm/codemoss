@@ -2149,8 +2149,8 @@ function MainApp() {
   useEffect(() => {
     try {
       const title = activeWorkspace
-        ? `CodeMoss - ${activeWorkspace.name}`
-        : "CodeMoss";
+        ? `MossX - ${activeWorkspace.name}`
+        : "MossX";
       void getCurrentWindow().setTitle(title);
     } catch {
       // Non-Tauri environment, ignore.

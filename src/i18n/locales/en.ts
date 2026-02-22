@@ -39,7 +39,7 @@ const en = {
 
   // App
   app: {
-    title: "CodeMoss",
+    title: "MossX",
     subtitle: "Orchestrate agents across your local projects.",
   },
 
@@ -593,7 +593,7 @@ const en = {
 
     // Codex section
     codexTitle: "Codex",
-    codexDescription: "Configure the Codex CLI used by CodeMoss and validate the install.",
+    codexDescription: "Configure the Codex CLI used by MossX and validate the install.",
     defaultCodexPath: "Default Codex path",
     codexPlaceholder: "codex",
     usePath: "Use PATH",
@@ -627,7 +627,7 @@ const en = {
     remoteBackendToken: "Token (optional)",
     remoteBackendHostAriaLabel: "Remote backend host",
     remoteBackendTokenAriaLabel: "Remote backend token",
-    remoteBackendDesc: "Start the daemon separately and point CodeMoss to it (host:port + token).",
+    remoteBackendDesc: "Start the daemon separately and point MossX to it (host:port + token).",
     globalAgentsMdPlaceholder: "Add global instructions for Codex agents…",
     storedAt: "Stored at",
     globalConfigTomlPlaceholder: "Edit the global Codex config.toml…",
@@ -1661,13 +1661,13 @@ const en = {
     // Delete dialogs
     deleteWorkspaceTitle: "Remove Workspace",
     deleteWorkspaceConfirm: "Are you sure you want to remove \"{{name}}\"?",
-    deleteWorkspaceMessage: "This will remove the workspace from CodeMoss.",
+    deleteWorkspaceMessage: "This will remove the workspace from MossX.",
     deleteWorkspaceWorktreeWarning: "This will also delete {{count}} worktree on disk.",
     deleteWorkspaceWorktreeWarning_other: "This will also delete {{count}} worktrees on disk.",
     deleteWorkspaceBeforeYouConfirm: "Before you continue:",
     deleteWorkspaceWillHappenTitle: "What will happen:",
     deleteWorkspaceWillNotHappenTitle: "What will not happen:",
-    deleteWorkspaceEffectListOnly: "The workspace will be removed from the CodeMoss list only.",
+    deleteWorkspaceEffectListOnly: "The workspace will be removed from the MossX list only.",
     deleteWorkspaceEffectSessions:
       "Active sessions under this workspace (and linked worktrees) will be closed.",
     deleteWorkspaceEffectDeleteWorktrees:
@@ -1692,7 +1692,7 @@ const en = {
       "Not run checkout/merge/rebase or any other Git write operation.",
     deleteWorktreeTitle: "Delete Worktree",
     deleteWorktreeConfirm: "Are you sure you want to delete \"{{name}}\"?",
-    deleteWorktreeMessage: "This will close the agent, remove its worktree, and delete it from CodeMoss.",
+    deleteWorktreeMessage: "This will close the agent, remove its worktree, and delete it from MossX.",
     deleteWorktreeFailed: "Delete worktree failed",
   },
 
@@ -1932,8 +1932,8 @@ const en = {
     lock: "Lock Screen",
     locked: "Locked",
     brandKicker: "Codemoss Product Atlas",
-    title: "CodeMoss Secure Lock · Engineering Capability Overview",
-    description: "Threads and tasks keep running in the background. Use this lock screen to review the full CodeMoss delivery loop: planning, execution orchestration, review, and shipping.",
+    title: "MossX Secure Lock · Engineering Capability Overview",
+    description: "Threads and tasks keep running in the background. Use this lock screen to review the full MossX delivery loop: planning, execution orchestration, review, and shipping.",
     tabLabel: "Lock screen tab navigation",
     tabs: {
       live: "Live Sessions",
@@ -1946,9 +1946,9 @@ const en = {
     liveEmpty: "No running session output right now.",
     liveRunning: "Running",
     capabilityTitle: "Capability Atlas",
-    capabilityDesc: "CodeMoss is not just a chat shell. It is a local-first engineering workspace designed for production flow.",
+    capabilityDesc: "MossX is not just a chat shell. It is a local-first engineering workspace designed for production flow.",
     journeyTitle: "Typical Delivery Journey",
-    journeyDesc: "Most changes move through this sequence in CodeMoss:",
+    journeyDesc: "Most changes move through this sequence in MossX:",
     elementsTitle: "Element Guide",
     elementsDesc: "Use this page to quickly review each core module and its responsibility.",
     unlockTitle: "Unlock Panel",
@@ -2100,7 +2100,7 @@ const en = {
     offlineStep1: "/plugin marketplace add thedotmack/claude-mem",
     offlineStep2: "/plugin install claude-mem",
     offlineStep3: "Restart Claude Code in terminal",
-    offlineStep4: "Restart CodeMoss",
+    offlineStep4: "Restart MossX",
   },
 };
 

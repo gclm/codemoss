@@ -39,7 +39,7 @@ const zh = {
 
   // 应用
   app: {
-    title: "CodeMoss",
+    title: "MossX",
     subtitle: "下一代VibeCoding，何必用IDE",
   },
 
@@ -592,7 +592,7 @@ const zh = {
 
     // Codex 部分
     codexTitle: "Codex",
-    codexDescription: "配置 CodeMoss 使用的 Codex CLI 并验证安装。",
+    codexDescription: "配置 MossX 使用的 Codex CLI 并验证安装。",
     defaultCodexPath: "默认 Codex 路径",
     codexPlaceholder: "codex",
     usePath: "使用 PATH",
@@ -626,7 +626,7 @@ const zh = {
     remoteBackendToken: "令牌（可选）",
     remoteBackendHostAriaLabel: "远程后端主机",
     remoteBackendTokenAriaLabel: "远程后端令牌",
-    remoteBackendDesc: "单独启动守护进程并将 CodeMoss 指向它（host:port + token）。",
+    remoteBackendDesc: "单独启动守护进程并将 MossX 指向它（host:port + token）。",
     globalAgentsMdPlaceholder: "为 Codex 代理添加全局指令…",
     storedAt: "存储在",
     globalConfigTomlPlaceholder: "编辑全局 Codex config.toml…",
@@ -1631,13 +1631,13 @@ const zh = {
     // 删除弹窗
     deleteWorkspaceTitle: "移出工作区",
     deleteWorkspaceConfirm: "确定要移出 \"{{name}}\" 吗？",
-    deleteWorkspaceMessage: "这将从 CodeMoss 中移出该工作区。",
+    deleteWorkspaceMessage: "这将从 MossX 中移出该工作区。",
     deleteWorkspaceWorktreeWarning: "同时还将删除磁盘上的 {{count}} 个工作树。",
     deleteWorkspaceWorktreeWarning_other: "同时还将删除磁盘上的 {{count}} 个工作树。",
     deleteWorkspaceBeforeYouConfirm: "执行前请确认：",
     deleteWorkspaceWillHappenTitle: "将会发生：",
     deleteWorkspaceWillNotHappenTitle: "不会发生：",
-    deleteWorkspaceEffectListOnly: "仅从 CodeMoss 列表中移出该工作区。",
+    deleteWorkspaceEffectListOnly: "仅从 MossX 列表中移出该工作区。",
     deleteWorkspaceEffectSessions: "会关闭该工作区及其关联工作树的活跃会话。",
     deleteWorkspaceEffectDeleteWorktrees: "会删除磁盘上的 {{count}} 个关联工作树目录。",
     deleteWorkspaceEffectDeleteWorktrees_other: "会删除磁盘上的 {{count}} 个关联工作树目录。",
@@ -1654,7 +1654,7 @@ const zh = {
       "不会执行 checkout/merge/rebase 等 Git 写操作。",
     deleteWorktreeTitle: "删除工作树",
     deleteWorktreeConfirm: "确定要删除 \"{{name}}\" 吗？",
-    deleteWorktreeMessage: "这将关闭代理、移除工作树，并从 CodeMoss 中删除它。",
+    deleteWorktreeMessage: "这将关闭代理、移除工作树，并从 MossX 中删除它。",
     deleteWorktreeFailed: "删除工作树失败",
   },
 
@@ -1894,8 +1894,8 @@ const zh = {
     lock: "锁屏",
     locked: "已锁定",
     brandKicker: "Codemoss Product Atlas",
-    title: "CodeMoss 安全锁屏 · 工程能力总览",
-    description: "会话与任务在后台持续运行。你可以在锁屏页快速复盘 CodeMoss 的完整工程链路：从需求规划、执行编排、代码审阅到交付归档。",
+    title: "MossX 安全锁屏 · 工程能力总览",
+    description: "会话与任务在后台持续运行。你可以在锁屏页快速复盘 MossX 的完整工程链路：从需求规划、执行编排、代码审阅到交付归档。",
     tabLabel: "锁屏内容切换",
     tabs: {
       live: "实时会话",
@@ -1910,7 +1910,7 @@ const zh = {
     capabilityTitle: "能力图谱",
     capabilityDesc: "这不是聊天壳，而是一套围绕工程生产力构建的本地优先 AI 工作台。",
     journeyTitle: "典型工作流",
-    journeyDesc: "一个需求在 CodeMoss 中通常这样落地：",
+    journeyDesc: "一个需求在 MossX 中通常这样落地：",
     elementsTitle: "界面元素介绍",
     elementsDesc: "锁屏页可直接回看核心模块职责，便于团队协作时统一认知。",
     unlockTitle: "解锁面板",
@@ -2062,7 +2062,7 @@ const zh = {
     offlineStep1: "/plugin marketplace add thedotmack/claude-mem",
     offlineStep2: "/plugin install claude-mem",
     offlineStep3: "重启终端 Claude Code",
-    offlineStep4: "重启 CodeMoss 即可",
+    offlineStep4: "重启 MossX 即可",
   },
 };
 
