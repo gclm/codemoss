@@ -51,6 +51,16 @@ type ThreadEventHandlersOptions = {
     workspaceId: string,
     engine: "claude" | "opencode",
   ) => string | null;
+  renamePendingMemoryCaptureKey: (
+    oldThreadId: string,
+    newThreadId: string,
+  ) => void;
+  onAgentMessageCompletedExternal?: (payload: {
+    workspaceId: string;
+    threadId: string;
+    itemId: string;
+    text: string;
+  }) => void;
 };
 
 export function useThreadEventHandlers({
@@ -75,6 +85,8 @@ export function useThreadEventHandlers({
   renameAutoTitlePendingKey,
   renameThreadTitleMapping,
   resolvePendingThreadForSession,
+  renamePendingMemoryCaptureKey,
+  onAgentMessageCompletedExternal,
 }: ThreadEventHandlersOptions) {
   const isReasoningRawDebugEnabled = () => {
     if (import.meta.env?.DEV) {
@@ -132,6 +144,7 @@ export function useThreadEventHandlers({
     recordThreadActivity,
     applyCollabThreadLinks,
     interruptedThreadsRef,
+    onAgentMessageCompletedExternal,
   });
 
   const {
@@ -161,6 +174,7 @@ export function useThreadEventHandlers({
     renameAutoTitlePendingKey,
     renameThreadTitleMapping,
     resolvePendingThreadForSession,
+    renamePendingMemoryCaptureKey,
   });
 
   const onBackgroundThreadAction = useCallback(

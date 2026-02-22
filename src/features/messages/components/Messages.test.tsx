@@ -194,6 +194,42 @@ describe("Messages", () => {
     expect(container.querySelector(".markdown-lead-icon")?.textContent ?? "").toContain("🚀");
   });
 
+  it("renders memory context summary as a separate collapsible card", async () => {
+    const items: ConversationItem[] = [
+      {
+        id: "memory-summary-1",
+        kind: "message",
+        role: "assistant",
+        text: "【记忆上下文摘要】\n[对话记录] 第一条；[项目上下文] 第二条",
+      },
+    ];
+
+    const { container } = render(
+      <Messages
+        items={items}
+        threadId="thread-1"
+        workspaceId="ws-1"
+        isThinking={false}
+        openTargets={[]}
+        selectedOpenAppId=""
+      />,
+    );
+
+    expect(container.querySelector(".memory-context-summary-card")).toBeTruthy();
+    expect(container.querySelector(".markdown")).toBeNull();
+    const toggle = container.querySelector(".memory-context-summary-toggle");
+    expect(toggle).toBeTruthy();
+    if (!toggle) {
+      return;
+    }
+    fireEvent.click(toggle);
+    await waitFor(() => {
+      const content = container.querySelector(".memory-context-summary-content");
+      expect(content?.textContent ?? "").toContain("第一条");
+      expect(content?.textContent ?? "").toContain("第二条");
+    });
+  });
+
   it("renders user-only anchors and scrolls on click", () => {
     const scrollToMock = vi.fn();
     HTMLElement.prototype.scrollTo = scrollToMock;

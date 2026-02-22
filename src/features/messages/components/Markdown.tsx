@@ -347,8 +347,8 @@ export const Markdown = memo(function Markdown({
   const [throttledValue, setThrottledValue] = useState(value);
   const lastUpdateRef = useRef(Date.now());
   const throttleTimerRef = useRef<number>(0);
-  const latestValueRef = useRef(value);
   const mountedRef = useRef(true);
+  const latestValueRef = useRef(value);
   latestValueRef.current = value;
 
   useEffect(() => {
@@ -367,7 +367,9 @@ export const Markdown = memo(function Markdown({
     }
     // Schedule a deferred flush. This timer is NOT cancelled when value
     // changes; it will fire once and read the latest value from the ref.
-    throttleTimerRef.current = window.setTimeout(() => {
+    const scheduleTimeout =
+      typeof window !== "undefined" ? window.setTimeout : globalThis.setTimeout;
+    throttleTimerRef.current = scheduleTimeout(() => {
       throttleTimerRef.current = 0;
       if (!mountedRef.current || typeof window === "undefined") {
         return;
@@ -383,7 +385,9 @@ export const Markdown = memo(function Markdown({
     return () => {
       mountedRef.current = false;
       if (throttleTimerRef.current) {
-        window.clearTimeout(throttleTimerRef.current);
+        const clearScheduledTimeout =
+          typeof window !== "undefined" ? window.clearTimeout : globalThis.clearTimeout;
+        clearScheduledTimeout(throttleTimerRef.current);
         throttleTimerRef.current = 0;
       }
     };

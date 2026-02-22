@@ -24,7 +24,11 @@ import {
   getOpenCodeStats as getOpenCodeStatsService,
   importOpenCodeSession as importOpenCodeSessionService,
   shareOpenCodeSession as shareOpenCodeSessionService,
+  projectMemoryCaptureAuto as projectMemoryCaptureAutoService,
 } from "../../../services/tauri";
+import { projectMemoryFacade } from "../../project-memory/services/projectMemoryFacade";
+import { injectProjectMemoryContext } from "../../project-memory/utils/memoryContextInjection";
+import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../../project-memory/utils/memoryMarkers";
 import { expandCustomPromptText } from "../../../utils/customPrompts";
 import {
   asString,
@@ -35,6 +39,23 @@ import type { ThreadAction, ThreadState } from "./useThreadsReducer";
 import { useReviewPrompt } from "./useReviewPrompt";
 import { formatRelativeTime } from "../../../utils/time";
 import { pushErrorToast } from "../../../services/toasts";
+
+const CONTEXT_INJECTION_TOGGLE_KEY = "projectMemory.contextInjectionEnabled";
+
+function readContextInjectionEnabled(): boolean {
+  if (typeof window === "undefined") {
+    return true;
+  }
+  try {
+    const raw = window.localStorage.getItem(CONTEXT_INJECTION_TOGGLE_KEY);
+    if (raw === null) {
+      return true;
+    }
+    return raw !== "false" && raw !== "0";
+  } catch {
+    return true;
+  }
+}
 
 type SendMessageOptions = {
   skipPromptExpansion?: boolean;
@@ -97,6 +118,16 @@ type UseThreadMessagingOptions = {
     sourceText: string,
     options?: { force?: boolean; clearPendingOnSkip?: boolean },
   ) => Promise<string | null>;
+  onInputMemoryCaptured?: (payload: {
+    workspaceId: string;
+    threadId: string;
+    turnId: string;
+    inputText: string;
+    memoryId: string | null;
+    workspaceName: string | null;
+    workspacePath: string | null;
+    engine: string | null;
+  }) => void;
 };
 
 export function useThreadMessaging({
@@ -133,6 +164,7 @@ export function useThreadMessaging({
   resolveOpenCodeAgent,
   resolveOpenCodeVariant,
   autoNameThread,
+  onInputMemoryCaptured,
 }: UseThreadMessagingOptions) {
   const { t, i18n } = useTranslation();
   const lastOpenCodeModelByThreadRef = useRef<Map<string, string>>(new Map());
@@ -228,6 +260,54 @@ export function useThreadMessaging({
           return;
         }
         finalText = promptExpansion?.expanded ?? messageText;
+      }
+      const visibleUserText = finalText;
+      const injectionResult = await injectProjectMemoryContext({
+        workspaceId: workspace.id,
+        userText: finalText,
+        enabled: readContextInjectionEnabled(),
+        listFn: projectMemoryFacade.list,
+      });
+      finalText = injectionResult.finalText;
+      if (injectionResult.injectedCount > 0 && injectionResult.previewText) {
+        dispatch({
+          type: "upsertItem",
+          workspaceId: workspace.id,
+          threadId,
+          item: {
+            id: `memory-context-${Date.now()}-${Math.random()
+              .toString(36)
+              .slice(2, 8)}`,
+            kind: "message",
+            role: "assistant",
+            text: `${MEMORY_CONTEXT_SUMMARY_PREFIX}\n${injectionResult.previewText}`,
+          },
+          hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
+        });
+      }
+      if (injectionResult.injectedCount > 0) {
+        onDebug?.({
+          id: `${Date.now()}-memory-context-injected`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "memory/context-injected",
+          payload: {
+            injectedCount: injectionResult.injectedCount,
+            injectedChars: injectionResult.injectedChars,
+            retrievalMs: injectionResult.retrievalMs,
+          },
+        });
+      } else if (injectionResult.disabledReason) {
+        onDebug?.({
+          id: `${Date.now()}-memory-context-skipped`,
+          timestamp: Date.now(),
+          source: "client",
+          label: "memory/context-skipped",
+          payload: {
+            reason: injectionResult.disabledReason,
+            retrievalMs: injectionResult.retrievalMs,
+          },
+        });
       }
       const resolvedModel =
         options?.model !== undefined ? options.model : model;
@@ -334,7 +414,7 @@ export function useThreadMessaging({
       const wasProcessing =
         (threadStatusById[threadId]?.isProcessing ?? false) && steerEnabled;
       if (wasProcessing) {
-        const optimisticText = finalText;
+        const optimisticText = visibleUserText;
         if (optimisticText || images.length > 0) {
           dispatch({
             type: "upsertItem",
@@ -420,7 +500,7 @@ export function useThreadMessaging({
               id: userMessageId,
               kind: "message",
               role: "user",
-              text: finalText,
+              text: visibleUserText,
               images: images.length > 0 ? images : undefined,
             },
             hasCustomName: Boolean(getCustomName(workspace.id, threadId)),
@@ -488,7 +568,7 @@ export function useThreadMessaging({
               label: "thread/title trigger",
               payload: { workspaceId: workspace.id, threadId, engine: cliEngine },
             });
-            void autoNameThread(workspace.id, threadId, finalText, {
+            void autoNameThread(workspace.id, threadId, visibleUserText, {
               clearPendingOnSkip: true,
             }).catch((error) => {
               onDebug?.({
@@ -550,6 +630,32 @@ export function useThreadMessaging({
         }
         setActiveTurnId(threadId, turnId);
 
+        void projectMemoryCaptureAutoService({
+          workspaceId: workspace.id,
+          text: visibleUserText,
+          threadId,
+          messageId: turnId,
+          source: "composer_send",
+          workspaceName: workspace.name ?? null,
+          workspacePath: workspace.path ?? null,
+          engine: resolvedEngine,
+        })
+          .then((captured) => {
+            onInputMemoryCaptured?.({
+              workspaceId: workspace.id,
+              threadId,
+              turnId,
+              inputText: visibleUserText,
+              memoryId: captured?.id ?? null,
+              workspaceName: workspace.name ?? null,
+              workspacePath: workspace.path ?? null,
+              engine: resolvedEngine,
+            });
+          })
+          .catch((err) =>
+            console.warn("[project-memory] auto capture failed:", err),
+          );
+
         if (!cliEngine && autoNameThread && !getCustomName(workspace.id, threadId)) {
           onDebug?.({
             id: `${Date.now()}-thread-title-trigger-codex`,
@@ -558,7 +664,7 @@ export function useThreadMessaging({
             label: "thread/title trigger",
             payload: { workspaceId: workspace.id, threadId, engine: "codex" },
           });
-          void autoNameThread(workspace.id, threadId, finalText, {
+          void autoNameThread(workspace.id, threadId, visibleUserText, {
             clearPendingOnSkip: true,
           }).catch((error) => {
             onDebug?.({
