@@ -5,7 +5,12 @@ import {
   type GitTranslate,
 } from "./gitErrorI18n";
 
-const t: GitTranslate = (key) => key;
+const t: GitTranslate = (key, options) => {
+  if (key === "git.historyErrorBranchUsedByWorktreeAt" && options?.path) {
+    return `${key}:${String(options.path)}`;
+  }
+  return key;
+};
 
 describe("gitErrorI18n", () => {
   it("localizes overwrite-by-revert errors as working tree dirty", () => {
@@ -39,5 +44,29 @@ describe("gitErrorI18n", () => {
     expect(localizeGitErrorMessage("fatal: reset failed", t)).toBe(
       "git.historyErrorResetFailed",
     );
+  });
+
+  it("localizes git timeout and auth prompt errors", () => {
+    expect(
+      localizeGitErrorMessage(
+        "Git command timed out after 120s: git pull. Check network/authentication and retry.",
+        t,
+      ),
+    ).toBe("git.historyErrorCommandTimeout");
+    expect(
+      localizeGitErrorMessage(
+        "fatal: could not read Username for 'https://github.com': terminal prompts disabled",
+        t,
+      ),
+    ).toBe("git.historyErrorAuthRequired");
+  });
+
+  it("localizes delete-branch used-by-worktree errors", () => {
+    expect(
+      localizeGitErrorMessage(
+        "Cannot delete branch 'feature/test' because it is currently used by worktree at '/tmp/worktree'.",
+        t,
+      ),
+    ).toBe("git.historyErrorBranchUsedByWorktreeAt:/tmp/worktree");
   });
 });

@@ -4,6 +4,12 @@ function normalize(raw: string): string {
   return raw.toLowerCase();
 }
 
+function extractWorktreePath(raw: string): string | null {
+  const match = raw.match(/used by worktree at ['"]?([^'"\n]+)['"]?/i);
+  const path = match?.[1]?.trim();
+  return path ? path : null;
+}
+
 export function isWorkingTreeDirtyBlockingError(raw: string): boolean {
   const message = normalize(raw);
   return (
@@ -44,6 +50,26 @@ export function localizeGitErrorMessage(
   }
   if (message.includes("reset failed")) {
     return t("git.historyErrorResetFailed");
+  }
+  if (message.includes("git command timed out after")) {
+    return t("git.historyErrorCommandTimeout");
+  }
+  if (
+    message.includes("terminal prompts disabled") ||
+    message.includes("authentication failed") ||
+    message.includes("could not read username")
+  ) {
+    return t("git.historyErrorAuthRequired");
+  }
+  if (
+    message.includes("cannot delete branch") &&
+    message.includes("used by worktree")
+  ) {
+    const worktreePath = extractWorktreePath(raw);
+    if (worktreePath) {
+      return t("git.historyErrorBranchUsedByWorktreeAt", { path: worktreePath });
+    }
+    return t("git.historyErrorBranchUsedByWorktree");
   }
   return raw;
 }
