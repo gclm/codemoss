@@ -16,7 +16,7 @@ describe("threadItems", () => {
     const item: ConversationItem = {
       id: "msg-1",
       kind: "message",
-      role: "assistant",
+      role: "user",
       text,
     };
     const normalized = normalizeItem(item);
@@ -25,6 +25,53 @@ describe("threadItems", () => {
       expect(normalized.text).not.toBe(text);
       expect(normalized.text.endsWith("...")).toBe(true);
       expect(normalized.text.length).toBeLessThan(text.length);
+    }
+  });
+
+  it("normalizes fragmented and repeated assistant message text", () => {
+    const fragmented =
+      "你\n\n好\n\n!\n\n有什\n\n么\n\n可以\n\n帮\n\n你的\n\n吗\n\n？";
+    const clean = "你好！有什么可以帮你的吗？";
+    const item: ConversationItem = {
+      id: "msg-assistant-normalize-1",
+      kind: "message",
+      role: "assistant",
+      text: `${fragmented}\n\n${clean}\n\n${clean}`,
+    };
+    const normalized = normalizeItem(item);
+    expect(normalized.kind).toBe("message");
+    if (normalized.kind === "message") {
+      const comparable = (value: string) =>
+        value.replace(/[！!]/g, "!").replace(/[？?]/g, "?");
+      expect(comparable(normalized.text)).toBe(comparable(clean));
+    }
+  });
+
+  it("keeps normal markdown assistant output unchanged", () => {
+    const markdown = [
+      "## 项目定位",
+      "",
+      "| 技术 | 版本/用途 |",
+      "| --- | --- |",
+      "| Node.js | >= 18.0.0 |",
+      "",
+      "```text",
+      "plan -> code -> verify -> doc",
+      "```",
+      "",
+      "- 第一项",
+      "- 第二项",
+    ].join("\n");
+    const item: ConversationItem = {
+      id: "msg-assistant-markdown-1",
+      kind: "message",
+      role: "assistant",
+      text: markdown,
+    };
+    const normalized = normalizeItem(item);
+    expect(normalized.kind).toBe("message");
+    if (normalized.kind === "message") {
+      expect(normalized.text).toBe(markdown);
     }
   });
 
@@ -176,6 +223,54 @@ describe("threadItems", () => {
     }
   });
 
+  it("coalesces duplicate message snapshots by id when preparing thread items", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "assistant-dup-1",
+        kind: "message",
+        role: "assistant",
+        text: "你\n\n好\n\n!",
+      },
+      {
+        id: "assistant-dup-1",
+        kind: "message",
+        role: "assistant",
+        text: "你好！",
+      },
+    ];
+    const prepared = prepareThreadItems(items);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0].kind).toBe("message");
+    if (prepared[0].kind === "message") {
+      expect(prepared[0].id).toBe("assistant-dup-1");
+      expect(prepared[0].text).toBe("你好！");
+    }
+  });
+
+  it("keeps reasoning item when it shares id with assistant message", () => {
+    const items: ConversationItem[] = [
+      {
+        id: "shared-1",
+        kind: "reasoning",
+        summary: "思考中",
+        content: "先检查上下文",
+      },
+      {
+        id: "shared-1",
+        kind: "message",
+        role: "assistant",
+        text: "我先检查一下上下文。",
+      },
+    ];
+    const prepared = prepareThreadItems(items);
+    const reasoning = prepared.find((entry) => entry.kind === "reasoning");
+    const message = prepared.find(
+      (entry) => entry.kind === "message" && entry.role === "assistant",
+    );
+    expect(reasoning).toBeDefined();
+    expect(message).toBeDefined();
+  });
+
   it("preserves distinct read paths that share the same basename", () => {
     const items: ConversationItem[] = [
       {
@@ -306,6 +401,75 @@ describe("threadItems", () => {
       expect(prepared[0].entries).toHaveLength(1);
       expect(prepared[0].entries[0].kind).toBe("search");
       expect(prepared[0].entries[0].label).toBe("myQuery in src");
+    }
+  });
+
+  it("strips injected project-memory block from user message text", () => {
+    const converted = buildConversationItem({
+      id: "user-1",
+      type: "userMessage",
+      content: [
+        {
+          type: "text",
+          text: `<project-memory source="project-memory" count="1" truncated="false">
+[对话记录] 测试记忆
+</project-memory>
+
+你猜我会不会 go 语言`,
+        },
+      ],
+    });
+
+    expect(converted).toBeTruthy();
+    expect(converted?.kind).toBe("message");
+    if (converted?.kind === "message") {
+      expect(converted.role).toBe("user");
+      expect(converted.text).toBe("你猜我会不会 go 语言");
+    }
+  });
+
+  it("strips injected project-memory block when rebuilding thread history", () => {
+    const converted = buildConversationItemFromThreadItem({
+      id: "user-2",
+      type: "userMessage",
+      content: [
+        {
+          type: "text",
+          text: `<project-memory source="project-memory" count="2" truncated="false">
+[项目上下文] xxx
+[对话记录] yyy
+</project-memory>
+go lang`,
+        },
+      ],
+    });
+
+    expect(converted).toBeTruthy();
+    expect(converted?.kind).toBe("message");
+    if (converted?.kind === "message") {
+      expect(converted.text).toBe("go lang");
+    }
+  });
+
+  it("strips legacy injected memory lines even if project-memory xml tags are missing", () => {
+    const converted = buildConversationItem({
+      id: "user-legacy-memory-1",
+      type: "userMessage",
+      content: [
+        {
+          type: "text",
+          text: `[对话记录] 用户输入：我今天从辽阳开车回沈阳了。中午12点半走的。和我老婆一起。 助手输出摘要：好的！从辽阳回沈阳，路程不远...
+
+我和谁一起回沈阳的`,
+        },
+      ],
+    });
+
+    expect(converted).toBeTruthy();
+    expect(converted?.kind).toBe("message");
+    if (converted?.kind === "message") {
+      expect(converted.role).toBe("user");
+      expect(converted.text).toBe("我和谁一起回沈阳的");
     }
   });
 
@@ -511,6 +675,20 @@ describe("threadItems", () => {
     }
   });
 
+  it("joins tokenized reasoning fragments without forced newlines", () => {
+    const item = buildConversationItem({
+      type: "reasoning",
+      id: "reasoning-tokenized-1",
+      summary: [{ text: "回忆记忆模块" }],
+      content: ["好", "的，我来帮你回", "忆一下记", "忆模块的分", "析。"],
+    });
+    expect(item).not.toBeNull();
+    if (item && item.kind === "reasoning") {
+      expect(item.content).toBe("好的，我来帮你回忆一下记忆模块的分析。");
+      expect(item.content).not.toContain("\n");
+    }
+  });
+
   it("merges thread items preferring richer local tool output", () => {
     const remote: ConversationItem = {
       id: "tool-2",
@@ -535,6 +713,29 @@ describe("threadItems", () => {
     if (merged[0].kind === "tool") {
       expect(merged[0].output).toBe("much longer output");
       expect(merged[0].status).toBe("ok");
+    }
+  });
+
+  it("prefers readable assistant message when remote snapshot is longer but duplicated", () => {
+    const clean = "你好！我是你的 AI 联合架构师。有什么可以帮你的吗？";
+    const remote: ConversationItem = {
+      id: "assistant-merge-readable-1",
+      kind: "message",
+      role: "assistant",
+      text: `${clean}\n\n${clean}\n\n${clean}`,
+    };
+    const local: ConversationItem = {
+      id: "assistant-merge-readable-1",
+      kind: "message",
+      role: "assistant",
+      text: clean,
+    };
+
+    const merged = mergeThreadItems([remote], [local]);
+    expect(merged).toHaveLength(1);
+    expect(merged[0].kind).toBe("message");
+    if (merged[0].kind === "message") {
+      expect(merged[0].text).toBe(clean);
     }
   });
 

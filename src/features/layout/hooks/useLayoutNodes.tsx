@@ -14,6 +14,7 @@ import { GitDiffViewer } from "../../git/components/GitDiffViewer";
 import { FileTreePanel } from "../../files/components/FileTreePanel";
 import { FileViewPanel } from "../../files/components/FileViewPanel";
 import { PromptPanel } from "../../prompts/components/PromptPanel";
+import { ProjectMemoryPanel } from "../../project-memory/components/ProjectMemoryPanel";
 import { DebugPanel } from "../../debug/components/DebugPanel";
 import { PlanPanel } from "../../plan/components/PlanPanel";
 import { TabBar } from "../../app/components/TabBar";
@@ -42,6 +43,7 @@ import type {
   GitHubPullRequestComment,
   GitHubPullRequest,
   GitLogEntry,
+  MessageSendOptions,
   ModelOption,
   OpenCodeAgentOption,
   OpenAppTarget,
@@ -184,6 +186,7 @@ type LayoutNodesOptions = {
   appMode: AppMode;
   onAppModeChange: (mode: AppMode) => void;
   onOpenMemory: () => void;
+  onOpenProjectMemory: () => void;
   updaterState: UpdateState;
   onUpdate: () => void;
   onDismissUpdate: () => void;
@@ -249,8 +252,8 @@ type LayoutNodesOptions = {
   worktreeApplyError: string | null;
   worktreeApplySuccess: boolean;
   onApplyWorktreeChanges?: () => void | Promise<void>;
-  filePanelMode: "git" | "files" | "prompts";
-  onFilePanelModeChange: (mode: "git" | "files" | "prompts") => void;
+  filePanelMode: "git" | "files" | "prompts" | "memory";
+  onFilePanelModeChange: (mode: "git" | "files" | "prompts" | "memory") => void;
   fileTreeLoading: boolean;
   onRefreshFiles?: () => void;
   gitStatus: {
@@ -351,8 +354,16 @@ type LayoutNodesOptions = {
   onRevealWorkspacePrompts: () => void | Promise<void>;
   onRevealGeneralPrompts: () => void | Promise<void>;
   canRevealGeneralPrompts: boolean;
-  onSend: (text: string, images: string[]) => void | Promise<void>;
-  onQueue: (text: string, images: string[]) => void | Promise<void>;
+  onSend: (
+    text: string,
+    images: string[],
+    options?: MessageSendOptions,
+  ) => void | Promise<void>;
+  onQueue: (
+    text: string,
+    images: string[],
+    options?: MessageSendOptions,
+  ) => void | Promise<void>;
   onStop: () => void;
   canStop: boolean;
   isReviewing: boolean;
@@ -610,6 +621,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       appMode={options.appMode}
       onAppModeChange={options.onAppModeChange}
       onOpenMemory={options.onOpenMemory}
+      onOpenProjectMemory={options.onOpenProjectMemory}
       showTerminalButton={options.showTerminalButton}
       isTerminalOpen={options.terminalOpen}
       onToggleTerminal={options.onToggleTerminal}
@@ -909,6 +921,14 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         onRevealWorkspacePrompts={options.onRevealWorkspacePrompts}
         onRevealGeneralPrompts={options.onRevealGeneralPrompts}
         canRevealGeneralPrompts={options.canRevealGeneralPrompts}
+      />
+    );
+  } else if (options.filePanelMode === "memory") {
+    gitDiffPanelNode = (
+      <ProjectMemoryPanel
+        workspaceId={options.activeWorkspace?.id ?? null}
+        filePanelMode={options.filePanelMode}
+        onFilePanelModeChange={options.onFilePanelModeChange}
       />
     );
   } else {

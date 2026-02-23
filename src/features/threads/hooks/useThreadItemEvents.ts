@@ -35,6 +35,12 @@ type UseThreadItemEventsOptions = {
     item: Record<string, unknown>,
   ) => void;
   interruptedThreadsRef: MutableRefObject<Set<string>>;
+  onAgentMessageCompletedExternal?: (payload: {
+    workspaceId: string;
+    threadId: string;
+    itemId: string;
+    text: string;
+  }) => void;
 };
 
 export function useThreadItemEvents({
@@ -47,6 +53,7 @@ export function useThreadItemEvents({
   recordThreadActivity,
   applyCollabThreadLinks,
   interruptedThreadsRef,
+  onAgentMessageCompletedExternal,
 }: UseThreadItemEventsOptions) {
   const handleItemUpdate = useCallback(
     (
@@ -198,11 +205,13 @@ export function useThreadItemEvents({
       if (threadId !== activeThreadId) {
         dispatch({ type: "markUnread", threadId, hasUnread: true });
       }
+      onAgentMessageCompletedExternal?.({ workspaceId, threadId, itemId, text });
     },
     [
       activeThreadId,
       dispatch,
       getCustomName,
+      onAgentMessageCompletedExternal,
       recordThreadActivity,
       safeMessageActivity,
     ],
