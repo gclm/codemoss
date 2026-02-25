@@ -235,9 +235,9 @@ type LayoutNodesOptions = {
   onOpenFile: (path: string) => void;
   onExitEditor: () => void;
   onExitDiff: () => void;
-  activeTab: "projects" | "codex" | "git" | "log";
-  onSelectTab: (tab: "projects" | "codex" | "git" | "log") => void;
-  tabletNavTab: "codex" | "git" | "log";
+  activeTab: "projects" | "codex" | "spec" | "git" | "log";
+  onSelectTab: (tab: "projects" | "codex" | "spec" | "git" | "log") => void;
+  tabletNavTab: "codex" | "spec" | "git" | "log";
   gitPanelMode: "diff" | "log" | "issues" | "prs";
   onGitPanelModeChange: (mode: "diff" | "log" | "issues" | "prs") => void;
   gitDiffViewStyle: "split" | "unified";
@@ -500,6 +500,7 @@ type LayoutNodesResult = {
   debugPanelFullNode: ReactNode;
   terminalDockNode: ReactNode;
   compactEmptyCodexNode: ReactNode;
+  compactEmptySpecNode: ReactNode;
   compactEmptyGitNode: ReactNode;
   compactGitBackNode: ReactNode;
 };
@@ -673,7 +674,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
       queuedMessages={options.activeQueue}
       sendLabel={
         options.composerSendLabel ??
-        (options.isProcessing && !options.steerEnabled ? "Queue" : "Send")
+        (options.isProcessing && !options.steerEnabled ? t("messages.queue") : t("messages.send"))
       }
       steerEnabled={options.steerEnabled}
       isProcessing={options.isProcessing}
@@ -852,7 +853,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         <button
           className="icon-button back-button"
           onClick={options.onExitDiff}
-          aria-label="Back to chat"
+          aria-label={t("files.backToChat")}
         >
           <ArrowLeft aria-hidden />
         </button>
@@ -928,7 +929,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
         worktreeApplyError={options.worktreeApplyError}
         worktreeApplySuccess={options.worktreeApplySuccess}
         onApplyWorktreeChanges={options.onApplyWorktreeChanges}
-        branchName={options.gitStatus.branchName || "unknown"}
+        branchName={options.gitStatus.branchName || t("workspace.unknownBranch")}
         totalAdditions={options.gitStatus.totalAdditions}
         totalDeletions={options.gitStatus.totalDeletions}
         fileStatus={options.fileStatus}
@@ -1113,6 +1114,16 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     </div>
   );
 
+  const compactEmptySpecNode = (
+    <div className="compact-empty">
+      <h3>{t("workspace.noWorkspaceSelected")}</h3>
+      <p>{t("workspace.selectProjectToReadSpecs")}</p>
+      <button className="ghost" onClick={options.onGoProjects}>
+        {t("workspace.goToProjects")}
+      </button>
+    </div>
+  );
+
   const compactGitBackNode = (
     <div className="compact-git-back">
       <button onClick={options.onBackFromDiff}>&#8249; {t("workspace.back")}</button>
@@ -1140,6 +1151,7 @@ export function useLayoutNodes(options: LayoutNodesOptions): LayoutNodesResult {
     debugPanelFullNode,
     terminalDockNode,
     compactEmptyCodexNode,
+    compactEmptySpecNode,
     compactEmptyGitNode,
     compactGitBackNode,
   };

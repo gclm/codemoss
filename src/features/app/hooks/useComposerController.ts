@@ -19,6 +19,7 @@ export function useComposerController({
   startReview,
   startResume,
   startMcp,
+  startSpecRoot,
   startStatus,
   startExport,
   startImport,
@@ -48,6 +49,7 @@ export function useComposerController({
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
+  startSpecRoot: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
   startExport: (text: string) => Promise<void>;
   startImport: (text: string) => Promise<void>;
@@ -92,6 +94,7 @@ export function useComposerController({
     startReview,
     startResume,
     startMcp,
+    startSpecRoot,
     startStatus,
     startExport,
     startImport,

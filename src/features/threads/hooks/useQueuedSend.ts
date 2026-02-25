@@ -26,6 +26,7 @@ type UseQueuedSendOptions = {
   startReview: (text: string) => Promise<void>;
   startResume: (text: string) => Promise<void>;
   startMcp: (text: string) => Promise<void>;
+  startSpecRoot: (text: string) => Promise<void>;
   startStatus: (text: string) => Promise<void>;
   startExport: (text: string) => Promise<void>;
   startImport: (text: string) => Promise<void>;
@@ -47,6 +48,7 @@ type SlashCommandKind =
   | "mcp"
   | "new"
   | "resume"
+  | "specRoot"
   | "review"
   | "status"
   | "export"
@@ -69,6 +71,9 @@ function parseSlashCommand(text: string): SlashCommandKind | null {
   }
   if (/^\/resume\b/i.test(text)) {
     return "resume";
+  }
+  if (/^\/spec-root\b/i.test(text)) {
+    return "specRoot";
   }
   if (/^\/status\b/i.test(text)) {
     return "status";
@@ -103,6 +108,7 @@ export function useQueuedSend({
   startReview,
   startResume,
   startMcp,
+  startSpecRoot,
   startStatus,
   startExport,
   startImport,
@@ -169,6 +175,10 @@ export function useQueuedSend({
         await startMcp(trimmed);
         return;
       }
+      if (command === "specRoot") {
+        await startSpecRoot(trimmed);
+        return;
+      }
       if (command === "status") {
         await startStatus(trimmed);
         return;
@@ -205,6 +215,7 @@ export function useQueuedSend({
       startReview,
       startResume,
       startMcp,
+      startSpecRoot,
       startStatus,
       startExport,
       startImport,
