@@ -90,6 +90,9 @@ export type ConversationItem =
       id: string;
       kind: "explore";
       status: "exploring" | "explored";
+      title?: string;
+      collapsible?: boolean;
+      mergeKey?: string;
       entries: { kind: "read" | "search" | "list" | "run"; label: string; detail?: string }[];
     }
   | {
@@ -595,6 +598,14 @@ export type QueuedMessage = {
   text: string;
   createdAt: number;
   images?: string[];
+  sendOptions?: MessageSendOptions;
+};
+
+export type MemoryContextInjectionMode = "summary" | "detail";
+
+export type MessageSendOptions = {
+  selectedMemoryIds?: string[];
+  selectedMemoryInjectionMode?: MemoryContextInjectionMode;
 };
 
 export type ModelOption = {
@@ -621,6 +632,7 @@ export type SkillOption = {
   name: string;
   path: string;
   description?: string;
+  source?: string;
 };
 
 export type CustomPromptOption = {
@@ -638,6 +650,7 @@ export type CustomCommandOption = {
   description?: string;
   argumentHint?: string;
   content: string;
+  source?: string;
 };
 
 export type OpenCodeAgentOption = {

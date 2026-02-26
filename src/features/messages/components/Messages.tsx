@@ -4,6 +4,8 @@ import { useTranslation } from "react-i18next";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import Brain from "lucide-react/dist/esm/icons/brain";
 import Check from "lucide-react/dist/esm/icons/check";
+import ChevronDown from "lucide-react/dist/esm/icons/chevron-down";
+import ChevronUp from "lucide-react/dist/esm/icons/chevron-up";
 import Copy from "lucide-react/dist/esm/icons/copy";
 import Terminal from "lucide-react/dist/esm/icons/terminal";
 import X from "lucide-react/dist/esm/icons/x";
@@ -28,6 +30,7 @@ import {
   SearchToolGroupBlock,
 } from "./toolBlocks";
 import { buildCommandSummary } from "./toolBlocks/toolConstants";
+import { MEMORY_CONTEXT_SUMMARY_PREFIX } from "../../project-memory/utils/memoryMarkers";
 
 
 type MessagesProps = {
@@ -56,8 +59,6 @@ type MessagesProps = {
   onOpenDiffPath?: (path: string) => void;
   onOpenPlanPanel?: () => void;
 };
-
-type StatusTone = "completed" | "processing" | "failed" | "unknown";
 
 type WorkingIndicatorProps = {
   isThinking: boolean;
@@ -105,6 +106,8 @@ type DiffRowProps = {
 
 type ExploreRowProps = {
   item: Extract<ConversationItem, { kind: "explore" }>;
+  isExpanded: boolean;
+  onToggle: (id: string) => void;
 };
 
 type MessageImage = {
@@ -112,14 +115,181 @@ type MessageImage = {
   label: string;
 };
 
+type MemoryContextSummary = {
+  preview: string;
+  lines: string[];
+};
+
 const SCROLL_THRESHOLD_PX = 120;
 const OPENCODE_NON_STREAMING_HINT_DELAY_MS = 12_000;
+const PARAGRAPH_BREAK_SPLIT_REGEX = /\r?\n[^\S\r\n]*\r?\n+/;
+const PROJECT_MEMORY_KIND_LINE_REGEX =
+  /^\[(?:已知问题|技术决策|项目上下文|对话记录|笔记|记忆)\]\s*/;
+const LEGACY_MEMORY_RECORD_HINT_REGEX =
+  /(?:用户输入[:：]|助手输出摘要[:：]|助手输出[:：])/;
+const PROJECT_MEMORY_XML_PREFIX_REGEX =
+  /^<project-memory\b[^>]*>([\s\S]*?)<\/project-memory>\s*/i;
 
 function sanitizeReasoningTitle(title: string) {
   return title
     .replace(/[`*_~]/g, "")
     .replace(/\[(.*?)\]\(.*?\)/g, "$1")
     .trim();
+}
+
+function compactReasoningText(value: string) {
+  return value.replace(/\s+/g, "");
+}
+
+function compactComparableReasoningText(value: string) {
+  return compactReasoningText(value)
+    .replace(/[！!]/g, "!")
+    .replace(/[？?]/g, "?")
+    .replace(/[，,]/g, ",")
+    .replace(/[。．.]/g, ".");
+}
+
+function sliceByComparableLength(text: string, targetLength: number) {
+  if (targetLength <= 0) {
+    return text;
+  }
+  let compactLength = 0;
+  for (let index = 0; index < text.length; index += 1) {
+    if (!/\s/.test(text[index])) {
+      compactLength += 1;
+    }
+    if (compactLength >= targetLength) {
+      return text.slice(index + 1);
+    }
+  }
+  return "";
+}
+
+function stripLeadingReasoningTitleOverlap(
+  content: string,
+  candidates: string[],
+) {
+  const trimmedContent = content.trim();
+  if (!trimmedContent) {
+    return trimmedContent;
+  }
+  const normalizedCandidates = candidates
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length >= 8);
+  if (normalizedCandidates.length === 0) {
+    return trimmedContent;
+  }
+
+  for (const candidate of normalizedCandidates) {
+    if (trimmedContent.startsWith(candidate)) {
+      return trimmedContent
+        .slice(candidate.length)
+        .replace(/^[\s，。！？!?:：;；、-]+/, "")
+        .trim();
+    }
+  }
+
+  const compactContent = compactComparableReasoningText(trimmedContent);
+  for (const candidate of normalizedCandidates) {
+    const compactCandidate = compactComparableReasoningText(candidate);
+    if (!compactCandidate || compactCandidate.length < 8) {
+      continue;
+    }
+    if (compactContent === compactCandidate) {
+      return "";
+    }
+    if (compactContent.startsWith(compactCandidate)) {
+      const sliced = sliceByComparableLength(trimmedContent, compactCandidate.length);
+      return sliced.replace(/^[\s，。！？!?:：;；、-]+/, "").trim();
+    }
+  }
+
+  return trimmedContent;
+}
+
+function dedupeAdjacentReasoningParagraphs(value: string) {
+  const collapseRepeatedParagraph = (paragraph: string) => {
+    const trimmed = paragraph.trim();
+    if (trimmed.length < 12) {
+      return trimmed;
+    }
+    const directRepeat = trimmed.match(/^([\s\S]{6,}?)\s+\1$/);
+    if (directRepeat?.[1]) {
+      return directRepeat[1].trim();
+    }
+    const compact = compactReasoningText(trimmed);
+    if (compact.length >= 12 && compact.length % 2 === 0) {
+      const half = compact.slice(0, compact.length / 2);
+      if (`${half}${half}` === compact) {
+        let compactLength = 0;
+        for (let index = 0; index < trimmed.length; index += 1) {
+          if (!/\s/.test(trimmed[index])) {
+            compactLength += 1;
+          }
+          if (compactLength >= half.length) {
+            return trimmed.slice(0, index + 1).trim();
+          }
+        }
+      }
+    }
+    const sentenceMatches = trimmed.match(/[^。！？!?]+[。！？!?]/g);
+    if (sentenceMatches && sentenceMatches.length >= 4 && sentenceMatches.length % 2 === 0) {
+      const mid = sentenceMatches.length / 2;
+      const left = compactReasoningText(sentenceMatches.slice(0, mid).join(""));
+      const right = compactReasoningText(sentenceMatches.slice(mid).join(""));
+      if (left.length >= 6 && left === right) {
+        return sentenceMatches.slice(0, mid).join("").trim();
+      }
+    }
+    return trimmed;
+  };
+
+  const paragraphs = value
+    .split(PARAGRAPH_BREAK_SPLIT_REGEX)
+    .map((line) => collapseRepeatedParagraph(line))
+    .filter(Boolean);
+  if (paragraphs.length <= 1) {
+    return paragraphs[0] ?? value.trim();
+  }
+  const deduped: string[] = [];
+  for (const paragraph of paragraphs) {
+    const previous = deduped[deduped.length - 1];
+    if (
+      previous &&
+      compactReasoningText(previous) === compactReasoningText(paragraph) &&
+      compactReasoningText(paragraph).length >= 8
+    ) {
+      continue;
+    }
+    deduped.push(paragraph);
+  }
+  return deduped.join("\n\n");
+}
+
+function scoreReasoningTextQuality(value: string) {
+  const paragraphs = value
+    .split(PARAGRAPH_BREAK_SPLIT_REGEX)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (paragraphs.length <= 1) {
+    return 0;
+  }
+  const shortParagraphs = paragraphs.filter((entry) => entry.length <= 8).length;
+  return shortParagraphs * 3 + paragraphs.length;
+}
+
+function chooseBetterReasoningText(left: string, right: string) {
+  const leftScore = scoreReasoningTextQuality(left);
+  const rightScore = scoreReasoningTextQuality(right);
+  if (leftScore < rightScore) {
+    return left;
+  }
+  if (rightScore < leftScore) {
+    return right;
+  }
+  const leftLength = compactComparableReasoningText(left).length;
+  const rightLength = compactComparableReasoningText(right).length;
+  return rightLength >= leftLength ? right : left;
 }
 
 function isGenericReasoningTitle(title: string) {
@@ -173,8 +343,28 @@ function parseReasoning(item: Extract<ConversationItem, { kind: "reasoning" }>) 
     // Preserve single-line reasoning so Codex rows don't collapse to title-only.
     contentBody = content.trim();
   }
-  const bodyParts = [summaryBody, contentBody].filter(Boolean);
-  const bodyText = bodyParts.join("\n\n").trim();
+  const normalizedSummaryBody = summaryBody.trim();
+  const normalizedContentBody = stripLeadingReasoningTitleOverlap(
+    contentBody,
+    [rawTitle, cleanTitle, normalizedSummaryBody],
+  ).trim();
+  const compactSummaryBody = compactReasoningText(normalizedSummaryBody);
+  const compactContentBody = compactReasoningText(normalizedContentBody);
+  let bodyParts: string[] = [];
+  if (normalizedSummaryBody && normalizedContentBody) {
+    if (compactSummaryBody === compactContentBody) {
+      bodyParts = [normalizedContentBody];
+    } else if (compactContentBody.startsWith(compactSummaryBody)) {
+      bodyParts = [normalizedContentBody];
+    } else if (compactSummaryBody.startsWith(compactContentBody)) {
+      bodyParts = [normalizedSummaryBody];
+    } else {
+      bodyParts = [normalizedSummaryBody, normalizedContentBody];
+    }
+  } else {
+    bodyParts = [normalizedSummaryBody, normalizedContentBody].filter(Boolean);
+  }
+  const bodyText = dedupeAdjacentReasoningParagraphs(bodyParts.join("\n\n")).trim();
   const hasBody = bodyText.length > 0;
   const hasAnyText = titleSource.trim().length > 0;
   const workingLabel = hasAnyText ? summaryTitle : null;
@@ -184,6 +374,77 @@ function parseReasoning(item: Extract<ConversationItem, { kind: "reasoning" }>) 
     hasBody,
     workingLabel,
   };
+}
+
+function isReasoningDuplicate(
+  previous: ReturnType<typeof parseReasoning>,
+  next: ReturnType<typeof parseReasoning>,
+) {
+  const previousTitle = compactComparableReasoningText(
+    previous.summaryTitle || previous.workingLabel || "",
+  );
+  const nextTitle = compactComparableReasoningText(
+    next.summaryTitle || next.workingLabel || "",
+  );
+  if (
+    previousTitle &&
+    nextTitle &&
+    previousTitle.length >= 6 &&
+    nextTitle.length >= 6 &&
+    previousTitle !== nextTitle
+  ) {
+    return false;
+  }
+
+  const previousBody = compactComparableReasoningText(previous.bodyText || "");
+  const nextBody = compactComparableReasoningText(next.bodyText || "");
+  if (previousBody && nextBody) {
+    if (previousBody === nextBody) {
+      return true;
+    }
+    if (previousBody.length >= 16 && nextBody.includes(previousBody)) {
+      return true;
+    }
+    if (nextBody.length >= 16 && previousBody.includes(nextBody)) {
+      return true;
+    }
+    return false;
+  }
+
+  if (!previousBody && !nextBody) {
+    const previousLabel = compactComparableReasoningText(previous.workingLabel || "");
+    const nextLabel = compactComparableReasoningText(next.workingLabel || "");
+    return previousLabel.length >= 8 && previousLabel === nextLabel;
+  }
+
+  return false;
+}
+
+function dedupeAdjacentReasoningItems(
+  list: ConversationItem[],
+  reasoningMetaById: Map<string, ReturnType<typeof parseReasoning>>,
+) {
+  const deduped: ConversationItem[] = [];
+  for (const item of list) {
+    const previous = deduped[deduped.length - 1];
+    if (item.kind !== "reasoning" || previous?.kind !== "reasoning") {
+      deduped.push(item);
+      continue;
+    }
+    const previousMeta =
+      reasoningMetaById.get(previous.id) ?? parseReasoning(previous);
+    const nextMeta = reasoningMetaById.get(item.id) ?? parseReasoning(item);
+    if (!isReasoningDuplicate(previousMeta, nextMeta)) {
+      deduped.push(item);
+      continue;
+    }
+    deduped[deduped.length - 1] = {
+      ...item,
+      summary: chooseBetterReasoningText(previous.summary, item.summary),
+      content: chooseBetterReasoningText(previous.content, item.content),
+    };
+  }
+  return deduped;
 }
 
 function normalizeMessageImageSrc(path: string) {
@@ -201,6 +462,111 @@ function normalizeMessageImageSrc(path: string) {
   } catch {
     return "";
   }
+}
+
+function parseMemoryContextSummary(text: string): MemoryContextSummary | null {
+  const normalized = text.trim();
+  if (!normalized.startsWith(MEMORY_CONTEXT_SUMMARY_PREFIX)) {
+    return null;
+  }
+  const preview = normalized.slice(MEMORY_CONTEXT_SUMMARY_PREFIX.length).trim();
+  if (!preview) {
+    return null;
+  }
+  const lines = preview
+    .split(/[；\n]+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return {
+    preview,
+    lines: lines.length > 0 ? lines : [preview],
+  };
+}
+
+function buildMemorySummary(preview: string): MemoryContextSummary | null {
+  const normalizedPreview = preview.trim();
+  if (!normalizedPreview) {
+    return null;
+  }
+  const lines = normalizedPreview
+    .split(/[；\n]+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  return {
+    preview: normalizedPreview,
+    lines: lines.length > 0 ? lines : [normalizedPreview],
+  };
+}
+
+function parseInjectedMemoryPrefixFromUser(
+  text: string,
+): { memorySummary: MemoryContextSummary; remainingText: string } | null {
+  const normalized = text.trimStart();
+  if (!normalized) {
+    return null;
+  }
+
+  const xmlMatch = normalized.match(PROJECT_MEMORY_XML_PREFIX_REGEX);
+  if (xmlMatch) {
+    const blockBody = (xmlMatch[1] ?? "").trim();
+    const memoryLines = blockBody
+      .split(/\r?\n+/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .filter((line) => PROJECT_MEMORY_KIND_LINE_REGEX.test(line));
+    const previewText = memoryLines.length > 0 ? memoryLines.join("；") : blockBody;
+    const memorySummary = buildMemorySummary(previewText);
+    if (!memorySummary) {
+      return null;
+    }
+    const remainingText = normalized.slice(xmlMatch[0].length).trimStart();
+    return { memorySummary, remainingText };
+  }
+
+  if (!PROJECT_MEMORY_KIND_LINE_REGEX.test(normalized)) {
+    return null;
+  }
+  if (!LEGACY_MEMORY_RECORD_HINT_REGEX.test(normalized)) {
+    return null;
+  }
+
+  const paragraphBlocks = normalized.split(PARAGRAPH_BREAK_SPLIT_REGEX);
+  if (paragraphBlocks.length >= 2) {
+    const firstBlock = (paragraphBlocks[0] ?? "").trim();
+    if (
+      PROJECT_MEMORY_KIND_LINE_REGEX.test(firstBlock) &&
+      LEGACY_MEMORY_RECORD_HINT_REGEX.test(firstBlock)
+    ) {
+      const memorySummary = buildMemorySummary(firstBlock);
+      if (!memorySummary) {
+        return null;
+      }
+      return {
+        memorySummary,
+        remainingText: paragraphBlocks.slice(1).join("\n\n").trimStart(),
+      };
+    }
+  }
+
+  const lines = normalized.split(/\r?\n/);
+  if (lines.length >= 2) {
+    const firstLine = (lines[0] ?? "").trim();
+    if (
+      PROJECT_MEMORY_KIND_LINE_REGEX.test(firstLine) &&
+      LEGACY_MEMORY_RECORD_HINT_REGEX.test(firstLine)
+    ) {
+      const memorySummary = buildMemorySummary(firstLine);
+      if (!memorySummary) {
+        return null;
+      }
+      return {
+        memorySummary,
+        remainingText: lines.slice(1).join("\n").trimStart(),
+      };
+    }
+  }
+
+  return null;
 }
 
 const MessageImageGrid = memo(function MessageImageGrid({
@@ -496,10 +862,23 @@ const MessageRow = memo(function MessageRow({
 }: MessageRowProps) {
   const { t } = useTranslation();
   const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
+  const [memorySummaryExpanded, setMemorySummaryExpanded] = useState(false);
+  const legacyUserMemory = useMemo(
+    () =>
+      item.role === "user" ? parseInjectedMemoryPrefixFromUser(item.text) : null,
+    [item.role, item.text],
+  );
+  const memorySummary = useMemo(
+    () =>
+      item.role === "assistant"
+        ? parseMemoryContextSummary(item.text)
+        : legacyUserMemory?.memorySummary ?? null,
+    [item.role, item.text, legacyUserMemory],
+  );
   const displayText = useMemo(() => {
-    const originalText = item.text;
+    const originalText = item.role === "user" ? legacyUserMemory?.remainingText ?? item.text : item.text;
     if (item.role !== "user") {
-      return originalText;
+      return memorySummary ? "" : originalText;
     }
     const userInputMatches = [...originalText.matchAll(/\[User Input\]\s*/g)];
     if (userInputMatches.length === 0) {
@@ -513,8 +892,9 @@ const MessageRow = memo(function MessageRow({
     const markerLength = lastMatch[0]?.length ?? 0;
     const extracted = originalText.slice(markerIndex + markerLength).trim();
     return extracted.length > 0 ? extracted : originalText;
-  }, [item.role, item.text]);
+  }, [item.role, item.text, memorySummary]);
   const hasText = displayText.trim().length > 0;
+  const hideCopyButton = item.role === "assistant" && Boolean(memorySummary) && !hasText;
   const markdownClassName =
     item.role === "assistant" && activeEngine === "codex"
       ? "markdown markdown-codex-canvas"
@@ -544,6 +924,37 @@ const MessageRow = memo(function MessageRow({
             hasText={hasText}
           />
         )}
+        {memorySummary ? (
+          <div className="memory-context-summary-card">
+            <button
+              type="button"
+              className="memory-context-summary-toggle"
+              onClick={() => setMemorySummaryExpanded((current) => !current)}
+              aria-expanded={memorySummaryExpanded}
+            >
+              <span className="memory-context-summary-title">
+                {t("messages.memoryContextSummary")}
+              </span>
+              <span className="memory-context-summary-count">
+                {t("messages.memoryContextSummaryCount", {
+                  count: memorySummary.lines.length,
+                })}
+              </span>
+              {memorySummaryExpanded ? (
+                <ChevronUp size={14} aria-hidden />
+              ) : (
+                <ChevronDown size={14} aria-hidden />
+              )}
+            </button>
+            {memorySummaryExpanded && (
+              <div className="memory-context-summary-content">
+                {memorySummary.lines.map((line, index) => (
+                  <p key={`${item.id}-line-${index}`}>{line}</p>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : null}
         {hasText && (
           <Markdown
             value={displayText}
@@ -561,18 +972,20 @@ const MessageRow = memo(function MessageRow({
             onClose={() => setLightboxIndex(null)}
           />
         )}
-        <button
-          type="button"
-          className={`ghost message-copy-button${isCopied ? " is-copied" : ""}`}
-          onClick={() => onCopy(item)}
-          aria-label={t("messages.copyMessage")}
-          title={t("messages.copyMessage")}
-        >
-          <span className="message-copy-icon" aria-hidden>
-            <Copy className="message-copy-icon-copy" size={14} />
-            <Check className="message-copy-icon-check" size={14} />
-          </span>
-        </button>
+        {!hideCopyButton && (
+          <button
+            type="button"
+            className={`ghost message-copy-button${isCopied ? " is-copied" : ""}`}
+            onClick={() => onCopy(item)}
+            aria-label={t("messages.copyMessage")}
+            title={t("messages.copyMessage")}
+          >
+            <span className="message-copy-icon" aria-hidden>
+              <Copy className="message-copy-icon-copy" size={14} />
+              <Check className="message-copy-icon-check" size={14} />
+            </span>
+          </button>
+        )}
       </div>
     </div>
   );
@@ -591,7 +1004,6 @@ const ReasoningRow = memo(function ReasoningRow({
 }: ReasoningRowProps) {
   const { t } = useTranslation();
   const { bodyText, hasBody } = parsed;
-  const reasoningTone: StatusTone = hasBody ? "completed" : "processing";
   return (
     <div
       className={`tool-inline reasoning-inline${
@@ -613,7 +1025,7 @@ const ReasoningRow = memo(function ReasoningRow({
           aria-expanded={isExpanded}
         >
           <Brain
-            className={`tool-inline-icon ${reasoningTone}`}
+            className="tool-inline-icon reasoning-icon"
             size={14}
             aria-hidden
           />
@@ -686,11 +1098,27 @@ function exploreKindLabel(kind: ExploreRowProps["item"]["entries"][number]["kind
   return kind[0].toUpperCase() + kind.slice(1);
 }
 
-const ExploreRow = memo(function ExploreRow({ item }: ExploreRowProps) {
-  const title = item.status === "exploring" ? "Exploring" : "Explored";
+const ExploreRow = memo(function ExploreRow({ item, isExpanded, onToggle }: ExploreRowProps) {
+  const { t } = useTranslation();
+  const title = item.title ?? (item.status === "exploring" ? "Exploring" : "Explored");
+  const isCollapsible = item.collapsible === true;
+  const listCollapsed = isCollapsible && !isExpanded;
+  const handleToggle = () => {
+    if (!isCollapsible) {
+      return;
+    }
+    onToggle(item.id);
+  };
   return (
-    <div className="tool-inline explore-inline">
-      <div className="tool-inline-bar-toggle" aria-hidden />
+    <div className={`tool-inline explore-inline${isCollapsible ? " is-collapsible" : ""}`}>
+      <button
+        type="button"
+        className="tool-inline-bar-toggle"
+        onClick={handleToggle}
+        aria-expanded={isCollapsible ? isExpanded : undefined}
+        aria-label={isCollapsible ? t("messages.toggleDetails") : undefined}
+        disabled={!isCollapsible}
+      />
       <div className="tool-inline-content">
         <div className="explore-inline-header">
           <Terminal
@@ -702,7 +1130,7 @@ const ExploreRow = memo(function ExploreRow({ item }: ExploreRowProps) {
           />
           <span className="explore-inline-title">{title}</span>
         </div>
-        <div className="explore-inline-list">
+        <div className={`explore-inline-list${listCollapsed ? " is-collapsed" : ""}`}>
           {item.entries.map((entry, index) => (
             <div key={`${entry.kind}-${entry.label}-${index}`} className="explore-inline-item">
               <span className="explore-inline-kind">{exploreKindLabel(entry.kind)}</span>
@@ -898,6 +1326,20 @@ export const Messages = memo(function Messages({
     return null;
   }, [items]);
 
+  const latestTitleOnlyReasoningId = useMemo(() => {
+    for (let index = items.length - 1; index >= 0; index -= 1) {
+      const item = items[index];
+      if (item.kind !== "reasoning") {
+        continue;
+      }
+      const parsed = reasoningMetaById.get(item.id);
+      if (parsed?.workingLabel && !parsed.hasBody) {
+        return item.id;
+      }
+    }
+    return null;
+  }, [items, reasoningMetaById]);
+
   const latestWorkingActivityLabel = useMemo(() => {
     let lastUserIndex = -1;
     for (let index = items.length - 1; index >= 0; index -= 1) {
@@ -947,22 +1389,26 @@ export const Messages = memo(function Messages({
     return true;
   }, [isThinking, items]);
 
-  const visibleItems = useMemo(
-    () =>
-      items.filter((item) => {
+  const visibleItems = useMemo(() => {
+    const filtered = items.filter((item) => {
         if (item.kind !== "reasoning") {
           return true;
         }
-        const hasBody = reasoningMetaById.get(item.id)?.hasBody ?? false;
+        const parsed = reasoningMetaById.get(item.id);
+        const hasBody = parsed?.hasBody ?? false;
         if (hasBody) {
           return true;
         }
-        // Keep title-only reasoning visible for Codex canvas to surface
-        // real-time model thinking progress without affecting other engines.
-        return activeEngine === "codex";
-      }),
-    [activeEngine, items, reasoningMetaById],
-  );
+        if (!parsed?.workingLabel) {
+          return false;
+        }
+        // Keep title-only reasoning visible for Codex canvas and retain the
+        // latest title-only reasoning row for other engines to avoid the
+        // "thinking module disappears" regression in real-time conversations.
+        return activeEngine === "codex" || item.id === latestTitleOnlyReasoningId;
+      });
+    return dedupeAdjacentReasoningItems(filtered, reasoningMetaById);
+  }, [activeEngine, items, latestTitleOnlyReasoningId, reasoningMetaById]);
   const messageAnchors = useMemo(() => {
     const messageItems = visibleItems.filter(
       (item): item is Extract<ConversationItem, { kind: "message" }> =>
@@ -1138,7 +1584,15 @@ export const Messages = memo(function Messages({
       );
     }
     if (item.kind === "explore") {
-      return <ExploreRow key={item.id} item={item} />;
+      const isExpanded = expandedItems.has(item.id);
+      return (
+        <ExploreRow
+          key={item.id}
+          item={item}
+          isExpanded={isExpanded}
+          onToggle={toggleExpanded}
+        />
+      );
     }
     return null;
   };
@@ -1209,7 +1663,11 @@ export const Messages = memo(function Messages({
   return (
     <div className={`messages-shell${hasAnchorRail ? " has-anchor-rail" : ""}`}>
       {hasAnchorRail && (
-        <div className="messages-anchor-rail" role="navigation" aria-label="Message anchors">
+        <div
+          className="messages-anchor-rail"
+          role="navigation"
+          aria-label={t("messages.anchorNavigation")}
+        >
           <div className="messages-anchor-track" aria-hidden />
           {messageAnchors.map((anchor, index) => {
             const isActive = activeAnchorId === anchor.id;
@@ -1227,8 +1685,8 @@ export const Messages = memo(function Messages({
                     scrollToAnchor(anchor.id);
                   }
                 }}
-                aria-label={`Go to user message ${index + 1}`}
-                title={`User #${index + 1}`}
+                aria-label={t("messages.anchorJumpToUser", { index: index + 1 })}
+                title={t("messages.anchorUserTitle", { index: index + 1 })}
               />
             );
           })}

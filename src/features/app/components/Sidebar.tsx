@@ -100,6 +100,8 @@ type SidebarProps = {
   appMode: AppMode;
   onAppModeChange: (mode: AppMode) => void;
   onOpenMemory: () => void;
+  onOpenProjectMemory: () => void;
+  onOpenSpecHub: () => void;
   topbarNode?: ReactNode;
 };
 
@@ -158,6 +160,8 @@ export function Sidebar({
   appMode,
   onAppModeChange,
   onOpenMemory,
+  onOpenProjectMemory,
+  onOpenSpecHub,
   topbarNode,
 }: SidebarProps) {
   const { t } = useTranslation();
@@ -582,6 +586,8 @@ export function Sidebar({
           <aside className="sidebar-tree-rail-column" aria-label={t("sidebar.pluginMarket")}>
             <SidebarMarketLinks
               onOpenMemory={onOpenMemory}
+              onOpenProjectMemory={onOpenProjectMemory}
+              onOpenSpecHub={onOpenSpecHub}
               appMode={appMode}
               onAppModeChange={onAppModeChange}
               onOpenSettings={onOpenSettings}

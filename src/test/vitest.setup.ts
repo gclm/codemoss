@@ -43,7 +43,7 @@ vi.mock("react-i18next", () => ({
         "sidebar.signInToCodex": "Sign in to Codex",
         "sidebar.switchAccount": "Switch account",
         "sidebar.signIn": "Sign in",
-        "app.title": "CodeMoss",
+        "app.title": "MossX",
         "app.subtitle": "Orchestrate agents across your local projects.",
         "home.latestAgents": "Latest agents",
         "home.agentReplied": "Agent replied.",
@@ -249,7 +249,7 @@ vi.mock("react-i18next", () => ({
         "settings.panelsSubtitle": "Panels",
         "settings.panelsSubDescription": "Toggle sidebars and panels.",
         "settings.toggleProjectsSidebar": "Toggle projects sidebar",
-        "settings.toggleGitSidebar": "Toggle git sidebar",
+        "settings.toggleGitSidebar": "Toggle right sidebar",
         "settings.toggleGlobalSearch": "Toggle global search",
         "settings.toggleDebugPanel": "Toggle debug panel",
         "settings.toggleTerminalPanel": "Toggle terminal panel",
@@ -283,7 +283,7 @@ vi.mock("react-i18next", () => ({
         "settings.preloadGitDiffsDesc": "Make viewing git diff faster.",
         // Codex section
         "settings.codexTitle": "Codex",
-        "settings.codexDescription": "Configure the Codex CLI used by CodeMoss and validate the install.",
+        "settings.codexDescription": "Configure the Codex CLI used by MossX and validate the install.",
         "settings.defaultCodexPath": "Default Codex path",
         "settings.codexPlaceholder": "codex",
         "settings.usePath": "Use PATH",
@@ -318,7 +318,7 @@ vi.mock("react-i18next", () => ({
         "settings.remoteBackendToken": "Token (optional)",
         "settings.remoteBackendHostAriaLabel": "Remote backend host",
         "settings.remoteBackendTokenAriaLabel": "Remote backend token",
-        "settings.remoteBackendDesc": "Start the daemon separately and point CodeMoss to it (host:port + token).",
+        "settings.remoteBackendDesc": "Start the daemon separately and point MossX to it (host:port + token).",
         "settings.globalAgentsMd": "Global AGENTS.md",
         "settings.globalAgentsMdPlaceholder": "Add global instructions for Codex agents…",
         "settings.storedAt": "Stored at",
@@ -480,15 +480,6 @@ vi.mock("@tauri-apps/api/core", () => ({
   convertFileSrc: (path: string) => `asset://localhost/${path}`,
   invoke: vi.fn(() => Promise.resolve(null)),
 }));
-
-vi.mock("@lobehub/icons", () => {
-  const Icon = () => null;
-  return {
-    Claude: Icon,
-    Gemini: Icon,
-    OpenAI: Icon,
-  };
-});
 
 // Mock client storage to use in-memory cache without Tauri backend
 vi.mock("../services/clientStorage", () => {

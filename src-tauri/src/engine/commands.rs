@@ -18,7 +18,10 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, State};
 use tokio::io::AsyncWriteExt;
 use tokio::process::Command;
+use tokio::sync::mpsc;
+use tokio::time::timeout;
 
+use crate::backend::events::AppServerEvent;
 use crate::state::AppState;
 
 use super::events::{engine_event_to_app_server_event, EngineEvent};
@@ -28,6 +31,211 @@ use super::{EngineConfig, EngineStatus, EngineType};
 /// Maximum lifetime for an event forwarder task. Prevents orphaned tasks from
 /// leaking memory when the underlying process hangs or is killed externally.
 const EVENT_FORWARDER_TIMEOUT_SECS: u64 = 30 * 60;
+
+fn normalize_custom_spec_root(custom_spec_root: Option<&str>) -> Option<String> {
+    let trimmed = custom_spec_root?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    if !Path::new(trimmed).is_absolute() {
+        return None;
+    }
+    Some(trimmed.to_string())
+}
+
+async fn run_codex_prompt_sync(
+    workspace_id: &str,
+    text: &str,
+    model: Option<String>,
+    effort: Option<String>,
+    access_mode: Option<String>,
+    custom_spec_root: Option<String>,
+    app: &AppHandle,
+    state: &AppState,
+) -> Result<String, String> {
+    crate::codex::ensure_codex_session(workspace_id, state, app).await?;
+
+    let session = {
+        let sessions = state.sessions.lock().await;
+        sessions
+            .get(workspace_id)
+            .ok_or("workspace not connected")?
+            .clone()
+    };
+
+    let thread_result = session
+        .send_request(
+            "thread/start",
+            json!({
+                "cwd": session.entry.path,
+                "approvalPolicy": "never"
+            }),
+        )
+        .await?;
+
+    if let Some(error) = thread_result.get("error") {
+        let error_msg = error
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown error starting Codex thread");
+        return Err(error_msg.to_string());
+    }
+
+    let helper_thread_id = thread_result
+        .get("result")
+        .and_then(|r| r.get("threadId"))
+        .or_else(|| {
+            thread_result
+                .get("result")
+                .and_then(|r| r.get("thread"))
+                .and_then(|t| t.get("id"))
+        })
+        .or_else(|| thread_result.get("threadId"))
+        .or_else(|| thread_result.get("thread").and_then(|t| t.get("id")))
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| "Failed to get thread id for Codex prompt".to_string())?
+        .to_string();
+
+    let _ = app.emit(
+        "app-server-event",
+        AppServerEvent {
+            workspace_id: workspace_id.to_string(),
+            message: json!({
+                "method": "codex/backgroundThread",
+                "params": {
+                    "threadId": helper_thread_id,
+                    "action": "hide"
+                }
+            }),
+        },
+    );
+
+    let (tx, mut rx) = mpsc::unbounded_channel::<Value>();
+    {
+        let mut callbacks = session.background_thread_callbacks.lock().await;
+        callbacks.insert(helper_thread_id.clone(), tx);
+    }
+
+    let access_mode = access_mode.unwrap_or_else(|| "read-only".to_string());
+    let mut writable_roots = vec![session.entry.path.clone()];
+    if let Some(spec_root) = custom_spec_root {
+        if !spec_root.is_empty()
+            && spec_root != session.entry.path
+            && !writable_roots.iter().any(|root| root == &spec_root)
+        {
+            writable_roots.push(spec_root);
+        }
+    }
+    let sandbox_policy = match access_mode.as_str() {
+        "full-access" => json!({ "type": "dangerFullAccess" }),
+        "current" => json!({
+            "type": "workspaceWrite",
+            "writableRoots": writable_roots,
+            "networkAccess": true
+        }),
+        _ => json!({ "type": "readOnly" }),
+    };
+    let turn_result = session
+        .send_request(
+            "turn/start",
+            json!({
+                "threadId": helper_thread_id,
+                "input": [{ "type": "text", "text": text }],
+                "cwd": session.entry.path,
+                "approvalPolicy": "never",
+                "sandboxPolicy": sandbox_policy,
+                "model": model,
+                "effort": effort,
+            }),
+        )
+        .await;
+
+    let turn_result = match turn_result {
+        Ok(result) => result,
+        Err(error) => {
+            {
+                let mut callbacks = session.background_thread_callbacks.lock().await;
+                callbacks.remove(&helper_thread_id);
+            }
+            let _ = session
+                .send_request(
+                    "thread/archive",
+                    json!({ "threadId": helper_thread_id.as_str() }),
+                )
+                .await;
+            return Err(error);
+        }
+    };
+
+    if let Some(error) = turn_result.get("error") {
+        let error_msg = error
+            .get("message")
+            .and_then(|m| m.as_str())
+            .unwrap_or("Unknown error starting Codex turn");
+        {
+            let mut callbacks = session.background_thread_callbacks.lock().await;
+            callbacks.remove(&helper_thread_id);
+        }
+        let _ = session
+            .send_request(
+                "thread/archive",
+                json!({ "threadId": helper_thread_id.as_str() }),
+            )
+            .await;
+        return Err(error_msg.to_string());
+    }
+
+    let mut response_text = String::new();
+    let collect_result = timeout(Duration::from_secs(600), async {
+        while let Some(event) = rx.recv().await {
+            let method = event.get("method").and_then(|m| m.as_str()).unwrap_or("");
+            match method {
+                "item/agentMessage/delta" => {
+                    if let Some(delta) = event
+                        .get("params")
+                        .and_then(|p| p.get("delta"))
+                        .and_then(|d| d.as_str())
+                    {
+                        response_text.push_str(delta);
+                    }
+                }
+                "turn/completed" => break,
+                "turn/error" => {
+                    let error_msg = event
+                        .get("params")
+                        .and_then(|p| p.get("error"))
+                        .and_then(|e| e.as_str())
+                        .unwrap_or("Unknown Codex turn error");
+                    return Err(error_msg.to_string());
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    })
+    .await;
+
+    {
+        let mut callbacks = session.background_thread_callbacks.lock().await;
+        callbacks.remove(&helper_thread_id);
+    }
+
+    let _ = session
+        .send_request("thread/archive", json!({ "threadId": helper_thread_id }))
+        .await;
+
+    match collect_result {
+        Ok(Ok(())) => {}
+        Ok(Err(error)) => return Err(error),
+        Err(_) => return Err("Timeout waiting for Codex response".to_string()),
+    }
+
+    let trimmed = response_text.trim().to_string();
+    if trimmed.is_empty() {
+        return Err("Codex returned empty response".to_string());
+    }
+    Ok(trimmed)
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -2257,6 +2465,7 @@ pub async fn engine_send_message(
     session_id: Option<String>,
     agent: Option<String>,
     variant: Option<String>,
+    custom_spec_root: Option<String>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Value, String> {
@@ -2285,6 +2494,7 @@ pub async fn engine_send_message(
             );
         }
     }
+    let normalized_custom_spec_root = normalize_custom_spec_root(custom_spec_root.as_deref());
 
     match effective_engine {
         EngineType::Claude => {
@@ -2346,6 +2556,7 @@ pub async fn engine_send_message(
                 agent: None,
                 variant: None,
                 collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
             };
 
             // Generate a unique turn ID and item ID for this turn
@@ -2359,6 +2570,7 @@ pub async fn engine_send_message(
             let mut current_thread_id = thread_id.clone();
             let item_id_clone = item_id.clone();
             let turn_id_for_forwarder = turn_id.clone();
+            let mut accumulated_agent_text = String::new();
 
             // Spawn event forwarder: reads from broadcast channel and emits Tauri events.
             tokio::spawn(async move {
@@ -2377,6 +2589,46 @@ pub async fn engine_send_message(
 
                     let event = turn_event.event;
                     let is_terminal = event.is_terminal();
+
+                    if let EngineEvent::TextDelta { text, .. } = &event {
+                        accumulated_agent_text.push_str(text);
+                    }
+
+                    // Claude 引擎补发 agentMessage completed 事件：
+                    // Claude API 只产生 TextDelta 流式增量 + TurnCompleted，
+                    // 不会产生 item/completed + type:"agentMessage"。
+                    // 这里优先使用流式累积文本，回退使用 result.text。
+                    if let EngineEvent::TurnCompleted { result, .. } = &event {
+                        let fallback_text = result
+                            .as_ref()
+                            .and_then(|result_val| result_val.get("text"))
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("")
+                            .to_string();
+                        let completed_text = if accumulated_agent_text.trim().is_empty() {
+                            fallback_text
+                        } else {
+                            accumulated_agent_text.clone()
+                        };
+                        if !completed_text.trim().is_empty() {
+                            let synthetic = AppServerEvent {
+                                workspace_id: event.workspace_id().to_string(),
+                                message: json!({
+                                    "method": "item/completed",
+                                    "params": {
+                                        "threadId": &current_thread_id,
+                                        "item": {
+                                            "id": &item_id_clone,
+                                            "type": "agentMessage",
+                                            "text": completed_text,
+                                            "status": "completed",
+                                        }
+                                    }
+                                }),
+                            };
+                            let _ = app_clone.emit("app-server-event", synthetic);
+                        }
+                    }
 
                     // Emit event with CURRENT thread_id (for SessionStarted, this is the OLD pending id)
                     // Frontend uses this to rename claude-pending-xxx to claude:{sessionId}
@@ -2497,6 +2749,7 @@ pub async fn engine_send_message(
                 agent,
                 variant,
                 collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
             };
 
             let turn_id = format!("opencode-turn-{}", uuid::Uuid::new_v4());
@@ -2576,6 +2829,178 @@ pub async fn engine_send_message(
             "{} is not supported yet",
             effective_engine.display_name()
         )),
+    }
+}
+
+/// Send a message and wait for the final plain-text response from the selected engine.
+#[tauri::command]
+pub async fn engine_send_message_sync(
+    workspace_id: String,
+    text: String,
+    engine: Option<EngineType>,
+    model: Option<String>,
+    effort: Option<String>,
+    access_mode: Option<String>,
+    images: Option<Vec<String>>,
+    continue_session: bool,
+    session_id: Option<String>,
+    agent: Option<String>,
+    variant: Option<String>,
+    custom_spec_root: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<Value, String> {
+    let manager = &state.engine_manager;
+    let active_engine = manager.get_active_engine().await;
+    let effective_engine = engine.unwrap_or(active_engine);
+
+    if text.trim().is_empty() {
+        return Err("Prompt text cannot be empty".to_string());
+    }
+    let normalized_custom_spec_root = normalize_custom_spec_root(custom_spec_root.as_deref());
+
+    match effective_engine {
+        EngineType::Claude => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+            let session = manager
+                .get_claude_session(&workspace_id, &workspace_path)
+                .await;
+
+            let resolved_session_id = if session_id.is_some() {
+                session_id
+            } else if continue_session {
+                session.get_session_id().await
+            } else {
+                None
+            };
+
+            let sanitized_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .and_then(|value| {
+                    if value.starts_with("claude-") {
+                        Some(value.to_string())
+                    } else {
+                        None
+                    }
+                });
+
+            let params = super::SendMessageParams {
+                text,
+                model: sanitized_model,
+                effort,
+                access_mode,
+                images,
+                continue_session: resolved_session_id.is_some(),
+                session_id: resolved_session_id,
+                agent: None,
+                variant: None,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("claude-sync-{}", uuid::Uuid::new_v4());
+            let response = timeout(
+                Duration::from_secs(900),
+                session.send_message(params, &turn_id),
+            )
+            .await
+            .map_err(|_| "Claude response timed out".to_string())??;
+
+            Ok(json!({
+                "engine": "claude",
+                "text": response
+            }))
+        }
+        EngineType::OpenCode => {
+            let workspace_path = {
+                let workspaces = state.workspaces.lock().await;
+                workspaces
+                    .get(&workspace_id)
+                    .map(|w| std::path::PathBuf::from(&w.path))
+                    .ok_or_else(|| "Workspace not found".to_string())?
+            };
+
+            let session = manager
+                .get_or_create_opencode_session(&workspace_id, &workspace_path)
+                .await;
+            let resolved_session_id = if session_id.is_some() {
+                session_id
+            } else if continue_session {
+                session.get_session_id().await
+            } else {
+                None
+            };
+
+            let sanitized_model = model
+                .as_ref()
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .and_then(|value| {
+                    if value.starts_with("claude-") {
+                        None
+                    } else {
+                        Some(value.to_string())
+                    }
+                });
+            let model_for_send =
+                sanitized_model.or_else(|| Some("openai/gpt-5.3-codex".to_string()));
+
+            let params = super::SendMessageParams {
+                text,
+                model: model_for_send,
+                effort,
+                access_mode,
+                images,
+                continue_session: resolved_session_id.is_some(),
+                session_id: resolved_session_id,
+                agent,
+                variant,
+                collaboration_mode: None,
+                custom_spec_root: normalized_custom_spec_root.clone(),
+            };
+
+            let turn_id = format!("opencode-sync-{}", uuid::Uuid::new_v4());
+            let response = timeout(
+                Duration::from_secs(900),
+                session.send_message(params, &turn_id),
+            )
+            .await
+            .map_err(|_| "OpenCode response timed out".to_string())??;
+
+            Ok(json!({
+                "engine": "opencode",
+                "text": response
+            }))
+        }
+        EngineType::Codex => {
+            let response = run_codex_prompt_sync(
+                &workspace_id,
+                &text,
+                model,
+                effort,
+                access_mode,
+                normalized_custom_spec_root.clone(),
+                &app,
+                &state,
+            )
+            .await?;
+
+            Ok(json!({
+                "engine": "codex",
+                "text": response
+            }))
+        }
+        EngineType::Gemini => {
+            Err("Gemini is not yet supported for sync project generation".to_string())
+        }
     }
 }
 
@@ -2917,7 +3342,7 @@ ses_3aaf6e47cffesEP8ro2EePcJAQ  New session - 2026-02-13T02:24:24.582Z          
     #[test]
     fn delete_opencode_session_files_removes_workspace_fallback_path() {
         let base = std::env::temp_dir().join(format!(
-            "code-moss-opencode-delete-{}",
+            "moss-x-opencode-delete-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|duration| duration.as_nanos())
@@ -2958,7 +3383,7 @@ ses_3aaf6e47cffesEP8ro2EePcJAQ  New session - 2026-02-13T02:24:24.582Z          
     #[test]
     fn delete_opencode_session_from_datastore_removes_session_and_storage_json() {
         let base = std::env::temp_dir().join(format!(
-            "code-moss-opencode-datastore-delete-{}",
+            "moss-x-opencode-datastore-delete-{}",
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|duration| duration.as_nanos())

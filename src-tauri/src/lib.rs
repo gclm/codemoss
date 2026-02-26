@@ -31,6 +31,7 @@ mod input_history;
 mod local_usage;
 mod menu;
 mod prompts;
+mod project_memory;
 mod remote_backend;
 mod rules;
 mod settings;
@@ -85,7 +86,7 @@ pub fn run() {
             // in the system browser instead of navigating the webview.
             let mut win_builder =
                 WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::App("index.html".into()))
-                    .title("CodeMoss")
+                    .title("MossX")
                     .inner_size(1200.0, 700.0)
                     .min_inner_size(360.0, 600.0)
                     .devtools(true);
@@ -189,6 +190,7 @@ pub fn run() {
             engine::opencode_lsp_symbols,
             engine::opencode_lsp_document_symbols,
             engine::engine_send_message,
+            engine::engine_send_message_sync,
             engine::engine_interrupt,
             engine::list_claude_sessions,
             engine::load_claude_session,
@@ -239,10 +241,15 @@ pub fn run() {
             workspaces::update_workspace_codex_bin,
             workspaces::connect_workspace,
             workspaces::list_workspace_files,
+            workspaces::list_external_spec_tree,
             workspaces::read_workspace_file,
+            workspaces::read_external_spec_file,
             workspaces::write_workspace_file,
+            workspaces::write_external_spec_file,
             workspaces::trash_workspace_item,
             workspaces::copy_workspace_item,
+            workspaces::run_workspace_command,
+            workspaces::run_spec_command,
             workspaces::open_workspace_in,
             workspaces::get_open_app_icon,
             // Git
@@ -302,6 +309,15 @@ pub fn run() {
             prompts::prompts_move,
             prompts::prompts_workspace_dir,
             prompts::prompts_global_dir,
+            // Project memory
+            project_memory::project_memory_get_settings,
+            project_memory::project_memory_update_settings,
+            project_memory::project_memory_list,
+            project_memory::project_memory_get,
+            project_memory::project_memory_create,
+            project_memory::project_memory_update,
+            project_memory::project_memory_delete,
+            project_memory::project_memory_capture_auto,
             // Terminal
             terminal::terminal_open,
             terminal::terminal_write,
