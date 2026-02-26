@@ -1530,6 +1530,8 @@ export function SpecHub({
   const [changeFilter, setChangeFilter] = useState<ChangeFilter>("all");
   const [expandedAllGroups, setExpandedAllGroups] = useState<Set<string>>(new Set());
   const [expandedArchivedGroups, setExpandedArchivedGroups] = useState<Set<string>>(new Set());
+  const hasInitializedAllGroupsRef = useRef(false);
+  const hasInitializedArchivedGroupsRef = useRef(false);
   const [isArtifactMaximized, setIsArtifactMaximized] = useState(false);
   const [isControlPanelCollapsed, setIsControlPanelCollapsed] = useState(false);
   const [selectedSpecPath, setSelectedSpecPath] = useState<string | null>(null);
@@ -1696,12 +1698,16 @@ export function SpecHub({
     setExpandedAllGroups((previous) => {
       const currentKeys = allChangeGroups.map((group) => group.key);
       if (currentKeys.length === 0) {
+        hasInitializedAllGroupsRef.current = false;
         return new Set();
       }
-      const hasPreviousSelection = previous.size > 0;
+      if (!hasInitializedAllGroupsRef.current) {
+        hasInitializedAllGroupsRef.current = true;
+        return new Set(currentKeys);
+      }
       const next = new Set<string>();
       currentKeys.forEach((key) => {
-        if (!hasPreviousSelection || previous.has(key)) {
+        if (previous.has(key)) {
           next.add(key);
         }
       });
@@ -1716,12 +1722,16 @@ export function SpecHub({
     setExpandedArchivedGroups((previous) => {
       const currentKeys = archivedChangeGroups.map((group) => group.key);
       if (currentKeys.length === 0) {
+        hasInitializedArchivedGroupsRef.current = false;
         return new Set();
       }
-      const hasPreviousSelection = previous.size > 0;
+      if (!hasInitializedArchivedGroupsRef.current) {
+        hasInitializedArchivedGroupsRef.current = true;
+        return new Set(currentKeys);
+      }
       const next = new Set<string>();
       currentKeys.forEach((key) => {
-        if (!hasPreviousSelection || previous.has(key)) {
+        if (previous.has(key)) {
           next.add(key);
         }
       });
@@ -1996,11 +2006,13 @@ export function SpecHub({
     [guidanceOutput],
   );
   const guidanceRawText = guidanceShowFullRaw ? guidanceOutput : guidanceRawSanitized.text;
-  const guidanceActionLabel = activeGuidanceAction ? t(`specHub.action.${activeGuidanceAction}`) : "--";
+  const guidanceActionLabel = activeGuidanceAction
+    ? t(`specHub.action.${activeGuidanceAction}`)
+    : t("specHub.placeholder.notAvailable");
   const guidanceStatusLabel = t(`specHub.aiTakeover.status.${guidanceStatus}`);
   const guidanceTimeLabel = latestGuidanceEvent
     ? new Date(latestGuidanceEvent.at).toLocaleTimeString()
-    : "--";
+    : t("specHub.placeholder.notAvailable");
   const guidanceNextActionKey: SpecHubActionKey | null =
     activeGuidanceAction === "continue" ? "apply" : activeGuidanceAction === "apply" ? "verify" : null;
   const guidanceNextAction = useMemo(
@@ -5639,7 +5651,11 @@ export function SpecHub({
                     </article>
                     <article className="spec-hub-guidance-field">
                       <span>{t("specHub.proposal.fieldEngine")}</span>
-                      <strong>{proposalExecution.executor ? engineDisplayName(proposalExecution.executor) : "--"}</strong>
+                      <strong>
+                        {proposalExecution.executor
+                          ? engineDisplayName(proposalExecution.executor)
+                          : t("specHub.placeholder.notAvailable")}
+                      </strong>
                     </article>
                     <article className="spec-hub-guidance-field">
                       <span>{t("specHub.proposal.fieldMode")}</span>
@@ -5792,7 +5808,7 @@ export function SpecHub({
                       <strong>
                         {continueAiEnhancementExecution.executor
                           ? engineDisplayName(continueAiEnhancementExecution.executor)
-                          : "--"}
+                          : t("specHub.placeholder.notAvailable")}
                       </strong>
                     </article>
                   </div>
@@ -5915,7 +5931,7 @@ export function SpecHub({
                       <strong>
                         {verifyAutoCompleteExecution.executor
                           ? engineDisplayName(verifyAutoCompleteExecution.executor)
-                          : "--"}
+                          : t("specHub.placeholder.notAvailable")}
                       </strong>
                     </article>
                   </div>
@@ -6174,7 +6190,11 @@ export function SpecHub({
                 </article>
                 <article className="spec-hub-guidance-field">
                   <span>{t("specHub.applyExecution.fieldExecutor")}</span>
-                  <strong>{activeApplyExecution.executor ? engineDisplayName(activeApplyExecution.executor) : "--"}</strong>
+                  <strong>
+                    {activeApplyExecution.executor
+                      ? engineDisplayName(activeApplyExecution.executor)
+                      : t("specHub.placeholder.notAvailable")}
+                  </strong>
                 </article>
               </div>
               {activeApplyExecution.startedAt ? (
@@ -6316,7 +6336,7 @@ export function SpecHub({
                       <strong>
                         {autoComboGuardExecution.executor
                           ? engineDisplayName(autoComboGuardExecution.executor)
-                          : "--"}
+                          : t("specHub.placeholder.notAvailable")}
                       </strong>
                     </article>
                   </div>

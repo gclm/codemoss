@@ -166,6 +166,8 @@ describe("useSpecHub", () => {
     mockGetWorkspaceFiles.mockResolvedValue({
       files: [],
       directories: [],
+      gitignored_files: [],
+      gitignored_directories: [],
     });
   });
 
@@ -347,6 +349,8 @@ describe("useSpecHub", () => {
     mockGetWorkspaceFiles.mockResolvedValue({
       files: ["openspec/changes/change-1/specs/spec-hub/spec.md"],
       directories: ["openspec/changes/change-1/specs/spec-hub"],
+      gitignored_files: [],
+      gitignored_directories: [],
     });
     mockEvaluateOpenSpecChangePreflight.mockResolvedValue({
       blockers: [

@@ -102,11 +102,9 @@ vi.mock("../../../components/ui/tabs", async () => {
   };
 });
 
-vi.mock("react-i18next", () => ({
-  initReactI18next: { type: "3rdParty", init: () => {} },
-  useTranslation: () => ({
-    t: (key: string, params?: Record<string, unknown>) => {
-      const translations: Record<string, string> = {
+vi.mock("react-i18next", () => {
+  const t = (key: string, params?: Record<string, unknown>) => {
+    const translations: Record<string, string> = {
         "specHub.actions": "Actions",
         "specHub.project": "Project",
         "specHub.sharedExecutor.label": "Execution engine",
@@ -218,6 +216,7 @@ vi.mock("react-i18next", () => ({
         "specHub.runtime.runContinueFirstForSpecs": "Run continue first.",
         "specHub.runtime.continueBriefAttached": "Continue brief attached.",
         "specHub.gate.warn": "Warn",
+        "specHub.placeholder.notAvailable": "N/A",
         "specHub.filter.all": "All",
         "specHub.filter.active": "Active",
         "specHub.filter.blocked": "Blocked",
@@ -305,18 +304,24 @@ vi.mock("react-i18next", () => ({
         "specHub.autoCombo.phase.remediate": "Auto recovery",
         "specHub.autoCombo.phase.verify": "Recovery verify",
         "specHub.autoCombo.phase.finalize": "Finalize",
-      };
-      if (typeof translations[key] === "string") {
-        return translations[key];
-      }
-      if (typeof params?.defaultValue === "string") {
-        return params.defaultValue;
-      }
-      return key;
-    },
-    i18n: { language: "en", changeLanguage: vi.fn() },
-  }),
-}));
+    };
+    if (typeof translations[key] === "string") {
+      return translations[key];
+    }
+    if (typeof params?.defaultValue === "string") {
+      return params.defaultValue;
+    }
+    return key;
+  };
+
+  const i18n = { language: "en", changeLanguage: vi.fn() };
+  const translationValue = { t, i18n };
+
+  return {
+    initReactI18next: { type: "3rdParty", init: () => {} },
+    useTranslation: () => translationValue,
+  };
+});
 
 vi.mock("@tauri-apps/plugin-opener", () => ({
   openUrl: vi.fn(),
@@ -345,6 +350,20 @@ const mockUseSpecHub = vi.mocked(useSpecHub);
 const mockDetectEngines = vi.mocked(detectEngines);
 const mockEngineSendMessageSync = vi.mocked(engineSendMessageSync);
 const mockPickImageFiles = vi.mocked(pickImageFiles);
+
+function getChangeGroupToggle(label: RegExp | string) {
+  const matches = screen
+    .getAllByRole("button")
+    .filter((button) => button.classList.contains("spec-hub-change-group-toggle"))
+    .filter((button) => {
+      const text = button.textContent ?? "";
+      return typeof label === "string" ? text.includes(label) : label.test(text);
+    });
+  if (matches.length !== 1) {
+    throw new Error(`Expected exactly one group toggle for label ${String(label)}, got ${matches.length}.`);
+  }
+  return matches[0] as HTMLButtonElement;
+}
 
 function createUseSpecHubState(gateMessage: string, overrides?: Record<string, unknown>) {
   const baseState = {
@@ -2043,8 +2062,8 @@ describe("SpecHub", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
 
-    expect(screen.getByRole("button", { name: /2026-02-26/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Other/i })).toBeTruthy();
+    expect(getChangeGroupToggle(/2026-02-26/i)).toBeTruthy();
+    expect(getChangeGroupToggle(/Other/i)).toBeTruthy();
     expect(screen.getByText("2026-02-26-alpha-fix")).toBeTruthy();
     expect(screen.getByText("2026-02-26-beta-fix")).toBeTruthy();
     expect(screen.getByText("legacy-change")).toBeTruthy();
@@ -2115,7 +2134,7 @@ describe("SpecHub", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
 
-    const groupToggle = screen.getByRole("button", { name: /2026-02-26/i });
+    const groupToggle = getChangeGroupToggle(/2026-02-26/i);
     expect(groupToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("2026-02-26-collapse-a")).toBeTruthy();
 
@@ -2201,8 +2220,8 @@ describe("SpecHub", () => {
       />,
     );
 
-    expect(screen.getByRole("button", { name: /2026-02-26/i })).toBeTruthy();
-    expect(screen.getByRole("button", { name: /Other/i })).toBeTruthy();
+    expect(getChangeGroupToggle(/2026-02-26/i)).toBeTruthy();
+    expect(getChangeGroupToggle(/Other/i)).toBeTruthy();
     expect(screen.getByText("2026-02-26-active-a")).toBeTruthy();
     expect(screen.getByText("2026-02-26-archived-b")).toBeTruthy();
     expect(screen.getByText("legacy-active-change")).toBeTruthy();
@@ -2281,7 +2300,7 @@ describe("SpecHub", () => {
       />,
     );
 
-    const allGroupToggle = screen.getByRole("button", { name: /2026-02-26/i });
+    const allGroupToggle = getChangeGroupToggle(/2026-02-26/i);
     expect(allGroupToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("2026-02-26-active-collapse")).toBeTruthy();
 
@@ -2290,12 +2309,12 @@ describe("SpecHub", () => {
     expect(screen.queryByText("2026-02-26-active-collapse")).toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Archived" }));
-    const archivedGroupToggle = screen.getByRole("button", { name: /2026-02-26/i });
+    const archivedGroupToggle = getChangeGroupToggle(/2026-02-26/i);
     expect(archivedGroupToggle.getAttribute("aria-expanded")).toBe("true");
     expect(screen.getByText("2026-02-26-archived-collapse")).toBeTruthy();
 
     fireEvent.click(screen.getByRole("button", { name: "All" }));
-    const allGroupToggleAfterSwitch = screen.getByRole("button", { name: /2026-02-26/i });
+    const allGroupToggleAfterSwitch = getChangeGroupToggle(/2026-02-26/i);
     expect(allGroupToggleAfterSwitch.getAttribute("aria-expanded")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "Expand all" }));

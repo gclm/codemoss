@@ -1969,6 +1969,9 @@ const en = {
       warn: "Gate warning: environment or validation still needs attention.",
       fail: "Gate failed: critical checks are blocking this workflow.",
     },
+    placeholder: {
+      notAvailable: "N/A",
+    },
     providerUnknown: "Unknown",
     supportFull: "Full",
     supportMinimal: "Minimal",

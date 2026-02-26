@@ -1929,6 +1929,9 @@ const zh = {
       warn: "门禁警告：环境或验证项存在待处理问题。",
       fail: "门禁失败：关键检查未通过，当前流程已阻断。",
     },
+    placeholder: {
+      notAvailable: "暂无",
+    },
     providerUnknown: "未知",
     supportFull: "完整支持",
     supportMinimal: "最小支持",
