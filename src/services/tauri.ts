@@ -1162,6 +1162,16 @@ export async function getWorkspaceFiles(workspaceId: string) {
   return invoke<WorkspaceFilesResponse>("list_workspace_files", { workspaceId });
 }
 
+export async function getWorkspaceDirectoryChildren(
+  workspaceId: string,
+  path: string,
+) {
+  return invoke<WorkspaceFilesResponse>("list_workspace_directory_children", {
+    workspaceId,
+    path,
+  });
+}
+
 export async function listExternalSpecTree(workspaceId: string, specRoot: string) {
   return invoke<WorkspaceFilesResponse>("list_external_spec_tree", { workspaceId, specRoot });
 }
